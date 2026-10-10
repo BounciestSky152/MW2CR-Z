@@ -1,0 +1,20 @@
+{
+  "_comment": "Every map a portal can lead to. Set \"enabled\": false for DLC you don't own. Custom maps work too if they load maps\\_zombiemode (and therefore the Portal Bridge hook).",
+  "maps": [
+    {"game": "waw", "id": "nazi_zombie_prototype", "name": "Nacht der Untoten"},
+    {"game": "waw", "id": "nazi_zombie_asylum", "name": "Verruckt"},
+    {"game": "waw", "id": "nazi_zombie_sumpf", "name": "Shi No Numa"},
+    {"game": "waw", "id": "nazi_zombie_factory", "name": "Der Riese"},
+
+    {"game": "bo1", "id": "zombie_theater", "name": "Kino der Toten"},
+    {"game": "bo1", "id": "zombie_pentagon", "name": "Five"},
+    {"game": "bo1", "id": "zombie_cosmodrome", "name": "Ascension"},
+    {"game": "bo1", "id": "zombie_coast", "name": "Call of the Dead"},
+    {"game": "bo1", "id": "zombie_temple", "name": "Shangri-La"},
+    {"game": "bo1", "id": "zombie_moon", "name": "Moon"},
+    {"game": "bo1", "id": "zombie_cod5_prototype", "name": "Nacht der Untoten Remastered"},
+    {"game": "bo1", "id": "zombie_cod5_asylum", "name": "Verruckt Remastered"},
+    {"game": "bo1", "id": "zombie_cod5_sumpf", "name": "Shi No Numa Remastered"},
+    {"game": "bo1", "id": "zombie_cod5_factory", "name": "Der Riese Remastered"}
+  ]
+}

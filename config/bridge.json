@@ -1,0 +1,67 @@
+{
+  "_comment": "Copy overrides into config/bridge.local.json (git-ignored) instead of editing this file. Keys there are deep-merged over this one.",
+
+  "games": {
+    "waw": {
+      "label": "World at War",
+      "game_dir": "C:/Program Files (x86)/Steam/steamapps/common/Call of Duty World at War",
+      "launch": [
+        "{game_dir}/CoDWaW.exe",
+        "+set", "fs_game", "mods/portal_bridge",
+        "+set", "developer", "1",
+        "+set", "developer_script", "1",
+        "+set", "logfile", "2",
+        "{state_args}",
+        "+devmap", "{map}"
+      ],
+      "process_names": ["CoDWaW.exe"],
+      "logs": [
+        "%LOCALAPPDATA%/Activision/CoDWaW/mods/portal_bridge/console.log",
+        "{game_dir}/mods/portal_bridge/console.log",
+        "{game_dir}/main/console.log"
+      ]
+    },
+    "bo1": {
+      "label": "Black Ops",
+      "game_dir": "C:/Program Files (x86)/Steam/steamapps/common/Call of Duty Black Ops",
+      "launch": [
+        "{game_dir}/BlackOps.exe",
+        "+set", "fs_game", "mods/portal_bridge",
+        "+set", "developer", "1",
+        "+set", "developer_script", "1",
+        "+set", "logfile", "2",
+        "+set", "zombiemode", "1",
+        "{state_args}",
+        "+devmap", "{map}"
+      ],
+      "process_names": ["BlackOps.exe"],
+      "logs": [
+        "{game_dir}/mods/portal_bridge/console.log",
+        "{game_dir}/main/console.log",
+        "%LOCALAPPDATA%/Activision/CoDBO/mods/portal_bridge/console.log"
+      ]
+    }
+  },
+
+  "bridge": {
+    "poll_interval": 0.25,
+    "kill_wait_seconds": 3.0,
+    "max_weapon_candidates": 4
+  },
+
+  "gameplay": {
+    "portal_cost": 0,
+    "portal_duration": 90,
+    "portal_distance": 120,
+    "portal_width": 44,
+    "portal_height": 80,
+    "portal_fx_points": 14,
+    "enter_radius": 22,
+    "bridge_timeout": 20,
+    "weapon_refund": 1000,
+    "perks_require_machine": true,
+    "same_game_changelevel": false,
+    "allow_combo": true,
+    "custom_fx": ""
+  }
+}

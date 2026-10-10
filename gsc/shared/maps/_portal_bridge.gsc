@@ -1,0 +1,1016 @@
+// =============================================================================
+//  Portal Bridge - core script (shared by World at War and Black Ops zombies)
+//
+//  Lets a player open a Portal-style portal in any zombies map. Walking through
+//  it saves everyone's round / points / perks / weapons and travels to another
+//  zombies map, either in the same game or across WaW <-> BO1 via the external
+//  Portal Bridge app (see README.md).
+//
+//  Hook: call maps\_portal_bridge::main(); as the first line of
+//  maps\_zombiemode::main(), or use the Plutonium bundle built by
+//  `python -m portal_bridge build`.
+//
+//  Game-specific functions (pb_game_id, pb_give_perk, ...) live in
+//  maps\_portal_bridge_game.gsc; the map list and settings are generated into
+//  maps\_portal_bridge_catalog.gsc from config/*.json.
+// =============================================================================
+#include maps\_utility;
+#include common_scripts\utility;
+#include maps\_portal_bridge_game;
+#include maps\_portal_bridge_catalog;
+
+main()
+{
+	mapname = toLower( getDvar( "mapname" ) );
+	if( !isSubStr( mapname, "zombie" ) || mapname == "zombietron" )
+		return;
+	if( isDefined( level.pb_started ) )
+		return;
+	level.pb_started = true;
+	level.pb_mapname = mapname;
+
+	precacheShader( "white" );
+	precacheModel( "tag_origin" );
+
+	level.pb_settings = pb_catalog_settings();
+	level.pb_maps = pb_catalog_maps();
+	level.pb_weapon_aliases = pb_catalog_weapon_aliases();
+
+	if( !isDefined( level._effect ) )
+		level._effect = [];
+	if( level.pb_settings.custom_fx != "" )
+		level._effect[ "pb_portal_custom" ] = loadfx( level.pb_settings.custom_fx );
+
+	setDvar( "pb_open", "" );
+	level thread pb_run();
+}
+
+pb_run()
+{
+	while( get_players().size == 0 )
+		wait 0.1;
+
+	level.pb_dests = pb_build_destinations();
+
+	state = getDvar( "pb_state" );
+	if( state != "" )
+	{
+		// Clear it so a map restart doesn't apply the same arrival twice.
+		setDvar( "pb_state", "" );
+		level thread pb_arrive( state );
+	}
+
+	level thread pb_watch_connections();
+	players = get_players();
+	for( i = 0; i < players.size; i++ )
+		players[i] thread pb_player_think();
+}
+
+pb_watch_connections()
+{
+	for( ;; )
+	{
+		level waittill( "connecting", player );
+		player thread pb_player_think();
+	}
+}
+
+pb_build_destinations()
+{
+	dests = [];
+	cur_game = pb_game_id();
+	for( i = 0; i < level.pb_maps.size; i++ )
+	{
+		m = level.pb_maps[i];
+		if( m.game_id == cur_game && m.id == level.pb_mapname )
+			continue;
+		dests[ dests.size ] = m;
+	}
+	return dests;
+}
+
+// -----------------------------------------------------------------------------
+//  Opening a portal
+// -----------------------------------------------------------------------------
+
+pb_player_think()
+{
+	self endon( "disconnect" );
+
+	if( isDefined( self.pb_thinking ) )
+		return;
+	self.pb_thinking = true;
+	self.pb_dest_index = 0;
+	combo_frames = 0;
+
+	for( ;; )
+	{
+		wait 0.05;
+
+		if( isDefined( level.pb_departing ) || !isDefined( self.sessionstate ) || self.sessionstate != "playing" )
+		{
+			combo_frames = 0;
+			continue;
+		}
+
+		want = false;
+
+		// Host only: `bind p "set pb_open 1"` (or `set pb_open zombie_moon` to preselect).
+		players = get_players();
+		if( players.size > 0 && players[0] == self )
+		{
+			request = getDvar( "pb_open" );
+			if( request != "" && request != "0" )
+			{
+				setDvar( "pb_open", "" );
+				self pb_preselect( request );
+				want = true;
+			}
+		}
+
+		// Anyone: hold USE + MELEE for one second.
+		if( level.pb_settings.allow_combo && self UseButtonPressed() && self MeleeButtonPressed() )
+		{
+			combo_frames++;
+			if( combo_frames >= 20 )
+			{
+				combo_frames = 0;
+				want = true;
+				while( self UseButtonPressed() )
+					wait 0.05;
+			}
+		}
+		else
+		{
+			combo_frames = 0;
+		}
+
+		if( want )
+			self pb_try_open_portal();
+	}
+}
+
+pb_preselect( request )
+{
+	for( i = 0; i < level.pb_dests.size; i++ )
+	{
+		if( level.pb_dests[i].id == request )
+		{
+			self.pb_dest_index = i;
+			return;
+		}
+	}
+}
+
+pb_try_open_portal()
+{
+	if( self maps\_laststand::player_is_in_laststand() )
+		return;
+
+	if( level.pb_dests.size == 0 )
+	{
+		self iPrintLnBold( "Portal Bridge: no destinations are configured." );
+		return;
+	}
+
+	cost = level.pb_settings.portal_cost;
+	if( cost > 0 && self.score < cost )
+	{
+		self iPrintLnBold( "You need " + cost + " points to open a portal." );
+		return;
+	}
+
+	spot = self pb_find_portal_spot();
+	if( !isDefined( spot ) )
+	{
+		self iPrintLnBold( "There's no room for a portal here." );
+		return;
+	}
+
+	if( isDefined( self.pb_portal ) )
+		self pb_close_portal();
+
+	if( cost > 0 )
+		self pb_set_score( self.score - cost );
+
+	if( self.pb_dest_index >= level.pb_dests.size )
+		self.pb_dest_index = 0;
+
+	self pb_open_portal( spot );
+}
+
+// Returns the ground point a short distance in front of the player, or undefined.
+pb_find_portal_spot()
+{
+	view = self getPlayerAngles();
+	forward = anglesToForward( ( 0, view[1], 0 ) );
+	eye = self.origin + ( 0, 0, 60 );
+
+	trace = bulletTrace( eye, eye + forward * level.pb_settings.portal_distance, false, self );
+	pos = trace[ "position" ];
+	if( trace[ "fraction" ] < 1 )
+		pos = pos - forward * 24;
+
+	ground = bulletTrace( pos + ( 0, 0, 8 ), pos - ( 0, 0, 200 ), false, self );
+	if( ground[ "fraction" ] >= 1 )
+		return undefined;
+
+	spot = ground[ "position" ];
+	if( pb_dist2d( spot, self.origin ) < 64 )
+		return undefined;
+
+	return spot;
+}
+
+pb_open_portal( spot )
+{
+	to_player = ( self.origin[0] - spot[0], self.origin[1] - spot[1], 0 );
+	angles = vectorToAngles( to_player );
+
+	half_w = level.pb_settings.portal_width / 2;
+	half_h = level.pb_settings.portal_height / 2;
+	center = spot + ( 0, 0, half_h + 4 );
+
+	portal = spawnStruct();
+	portal.origin = spot;
+	portal.center = center;
+
+	hub = spawn( "script_model", center );
+	hub setModel( "tag_origin" );
+	hub.angles = angles;
+	portal.hub = hub;
+
+	right = anglesToRight( angles );
+	up = anglesToUp( angles );
+	count = level.pb_settings.portal_fx_points;
+	portal.nodes = [];
+	for( i = 0; i < count; i++ )
+	{
+		a = 360.0 * i / count;
+		node = spawn( "script_model", center + right * ( cos( a ) * half_w ) + up * ( sin( a ) * half_h ) );
+		node setModel( "tag_origin" );
+		node.angles = angles;
+		node linkTo( hub );
+		portal.nodes[i] = node;
+	}
+
+	self.pb_portal = portal;
+	self thread pb_portal_think( portal );
+	level thread pb_portal_cleanup_on_disconnect( self, portal );
+
+	// FX need the entities to exist on the client for a frame before attaching.
+	wait 0.05;
+	fx = pb_portal_fx();
+	if( isDefined( fx ) )
+	{
+		for( i = 0; i < portal.nodes.size; i++ )
+		{
+			if( isDefined( portal.nodes[i] ) )
+				playFxOnTag( fx, portal.nodes[i], "tag_origin" );
+		}
+	}
+	if( isDefined( hub ) )
+		hub thread pb_portal_spin();
+
+	self iPrintLnBold( "Portal opened. Tap USE near it to pick a destination, then walk through." );
+}
+
+pb_portal_fx()
+{
+	if( isDefined( level._effect[ "pb_portal_custom" ] ) )
+		return level._effect[ "pb_portal_custom" ];
+
+	keys = pb_portal_fx_keys();
+	for( i = 0; i < keys.size; i++ )
+	{
+		if( isDefined( level._effect[ keys[i] ] ) )
+			return level._effect[ keys[i] ];
+	}
+	return undefined;
+}
+
+pb_portal_spin()
+{
+	self endon( "death" );
+	for( ;; )
+	{
+		self rotateRoll( 360, 2.5 );
+		wait 2.5;
+	}
+}
+
+pb_portal_think( portal )
+{
+	self endon( "disconnect" );
+	self endon( "pb_portal_closed" );
+
+	expire = undefined;
+	if( level.pb_settings.portal_duration > 0 )
+		expire = getTime() + level.pb_settings.portal_duration * 1000;
+
+	self pb_hud_create();
+	self pb_hud_update();
+	use_held = true;
+
+	for( ;; )
+	{
+		wait 0.05;
+
+		if( isDefined( level.pb_departing ) )
+			return;
+
+		if( isDefined( expire ) && getTime() > expire )
+		{
+			self iPrintLnBold( "Your portal fizzled out." );
+			self pb_close_portal();
+			return;
+		}
+
+		near = pb_dist2d( self.origin, portal.origin ) < 160 && abs( self.origin[2] - portal.origin[2] ) < 96;
+		self pb_hud_visible( near );
+
+		use = self UseButtonPressed();
+		if( near && use && !use_held && !self MeleeButtonPressed() )
+		{
+			self.pb_dest_index++;
+			if( self.pb_dest_index >= level.pb_dests.size )
+				self.pb_dest_index = 0;
+			self pb_hud_update();
+		}
+		use_held = use;
+
+		players = get_players();
+		for( i = 0; i < players.size; i++ )
+		{
+			if( players[i] pb_is_entering( portal ) )
+			{
+				level thread pb_depart( level.pb_dests[ self.pb_dest_index ], self );
+				return;
+			}
+		}
+	}
+}
+
+pb_is_entering( portal )
+{
+	if( !isDefined( self.sessionstate ) || self.sessionstate != "playing" )
+		return false;
+	if( self maps\_laststand::player_is_in_laststand() )
+		return false;
+	if( abs( self.origin[2] - portal.origin[2] ) > 48 )
+		return false;
+	return pb_dist2d( self.origin, portal.origin ) < level.pb_settings.enter_radius;
+}
+
+pb_close_portal()
+{
+	portal = self.pb_portal;
+	self.pb_portal = undefined;
+	self pb_hud_destroy();
+
+	if( isDefined( portal ) )
+	{
+		for( i = 0; i < portal.nodes.size; i++ )
+		{
+			if( isDefined( portal.nodes[i] ) )
+				portal.nodes[i] delete();
+		}
+		if( isDefined( portal.hub ) )
+			portal.hub delete();
+	}
+
+	// Last, since pb_portal_think may be the caller and ends on this notify.
+	self notify( "pb_portal_closed" );
+}
+
+pb_portal_cleanup_on_disconnect( player, portal )
+{
+	player endon( "pb_portal_closed" );
+	player waittill( "disconnect" );
+
+	for( i = 0; i < portal.nodes.size; i++ )
+	{
+		if( isDefined( portal.nodes[i] ) )
+			portal.nodes[i] delete();
+	}
+	if( isDefined( portal.hub ) )
+		portal.hub delete();
+}
+
+// -----------------------------------------------------------------------------
+//  HUD
+// -----------------------------------------------------------------------------
+
+pb_hud_create()
+{
+	self pb_hud_destroy();
+
+	self.pb_hud_dest = newClientHudElem( self );
+	self.pb_hud_dest.alignX = "center";
+	self.pb_hud_dest.alignY = "middle";
+	self.pb_hud_dest.horzAlign = "center";
+	self.pb_hud_dest.vertAlign = "middle";
+	self.pb_hud_dest.y = 70;
+	self.pb_hud_dest.fontScale = 1.5;
+	self.pb_hud_dest.color = ( 0.45, 0.8, 1 );
+	self.pb_hud_dest.foreground = true;
+	self.pb_hud_dest.alpha = 0;
+
+	self.pb_hud_help = newClientHudElem( self );
+	self.pb_hud_help.alignX = "center";
+	self.pb_hud_help.alignY = "middle";
+	self.pb_hud_help.horzAlign = "center";
+	self.pb_hud_help.vertAlign = "middle";
+	self.pb_hud_help.y = 88;
+	self.pb_hud_help.fontScale = 1.1;
+	self.pb_hud_help.color = ( 1, 0.65, 0.2 );
+	self.pb_hud_help.foreground = true;
+	self.pb_hud_help.alpha = 0;
+	self.pb_hud_help setText( "[USE] change destination  -  walk through to travel" );
+}
+
+pb_hud_update()
+{
+	if( !isDefined( self.pb_hud_dest ) )
+		return;
+	self.pb_hud_dest setText( "Portal to: " + level.pb_dests[ self.pb_dest_index ].label );
+}
+
+pb_hud_visible( visible )
+{
+	if( !isDefined( self.pb_hud_dest ) )
+		return;
+	alpha = 0;
+	if( visible )
+		alpha = 1;
+	self.pb_hud_dest.alpha = alpha;
+	self.pb_hud_help.alpha = alpha;
+}
+
+pb_hud_destroy()
+{
+	if( isDefined( self.pb_hud_dest ) )
+		self.pb_hud_dest destroy();
+	if( isDefined( self.pb_hud_help ) )
+		self.pb_hud_help destroy();
+	self.pb_hud_dest = undefined;
+	self.pb_hud_help = undefined;
+}
+
+// Fades a full-screen portal-blue overlay from one alpha to another.
+pb_flash( from, to, time )
+{
+	self endon( "disconnect" );
+
+	if( !isDefined( self.pb_flash_hud ) )
+	{
+		hud = newClientHudElem( self );
+		hud.x = 0;
+		hud.y = 0;
+		hud.alignX = "left";
+		hud.alignY = "top";
+		hud.horzAlign = "fullscreen";
+		hud.vertAlign = "fullscreen";
+		hud.foreground = true;
+		hud.sort = 1000;
+		hud.color = ( 0.55, 0.82, 1 );
+		hud setShader( "white", 640, 480 );
+		self.pb_flash_hud = hud;
+	}
+
+	hud = self.pb_flash_hud;
+	hud.alpha = from;
+	if( time > 0 )
+		hud fadeOverTime( time );
+	hud.alpha = to;
+
+	if( to > 0 )
+		return;
+
+	wait time;
+	if( isDefined( self.pb_flash_hud ) && self.pb_flash_hud.alpha == 0 )
+	{
+		self.pb_flash_hud destroy();
+		self.pb_flash_hud = undefined;
+	}
+}
+
+// -----------------------------------------------------------------------------
+//  Departure
+// -----------------------------------------------------------------------------
+
+pb_depart( dest, owner )
+{
+	if( isDefined( level.pb_departing ) )
+		return;
+	level.pb_departing = true;
+	level notify( "pb_departing" );
+
+	players = get_players();
+	for( i = 0; i < players.size; i++ )
+	{
+		players[i] freezeControls( true );
+		players[i].ignoreme = true;
+		players[i] thread pb_flash( 0, 1, 0.75 );
+		players[i] iPrintLnBold( "Stepping through to " + dest.label + "..." );
+	}
+
+	state = pb_encode_state( dest );
+	wait 0.8;
+
+	if( dest.game_id == pb_game_id() && level.pb_settings.same_game_changelevel )
+	{
+		setDvar( "pb_state", state );
+		pb_engine_changelevel( dest.id );
+		return;
+	}
+
+	// The Portal Bridge app tails the console log for this line, closes this
+	// game and launches the destination with the state passed back in.
+	pb_emit( "[PORTAL_BRIDGE] TRAVEL " + state );
+
+	wait level.pb_settings.bridge_timeout;
+
+	// Still running, so nobody picked the request up.
+	players = get_players();
+	for( i = 0; i < players.size; i++ )
+	{
+		players[i] freezeControls( false );
+		players[i].ignoreme = false;
+		players[i] thread pb_flash( 1, 0, 0.5 );
+		players[i] iPrintLnBold( "The portal collapsed - is the Portal Bridge app running?" );
+	}
+	if( isDefined( owner ) && isDefined( owner.pb_portal ) )
+		owner pb_close_portal();
+	level.pb_departing = undefined;
+}
+
+// State format (mirrored in portal_bridge/state.py):
+//   PB1|n=<nonce>|src=<game>:<map>|dst=<game>:<map>|r=<round>|p0=<player>|p1=...
+//   <player> = <score>~<perks>~<weapons>~<current>
+//   <perks>  = perk.perk...              ("-" when empty)
+//   <weapons>= name[:alt...]@clip@stock.name@clip@stock   ("-" when empty)
+//   <current>= name[:alt...]             ("-" when empty)
+pb_encode_state( dest )
+{
+	s = "PB1";
+	s = s + "|n=" + getTime() + randomInt( 100000 );
+	s = s + "|src=" + pb_game_id() + ":" + level.pb_mapname;
+	s = s + "|dst=" + dest.game_id + ":" + dest.id;
+	s = s + "|r=" + pb_current_round();
+
+	players = get_players();
+	for( i = 0; i < players.size; i++ )
+		s = s + "|p" + i + "=" + players[i] pb_encode_player();
+	return s;
+}
+
+pb_current_round()
+{
+	if( isDefined( level.round_number ) )
+		return level.round_number;
+	return 1;
+}
+
+pb_encode_player()
+{
+	perks = pb_join( self pb_get_perks(), "." );
+
+	items = [];
+	held = self GetWeaponsListPrimaries();
+	for( i = 0; i < held.size; i++ )
+	{
+		w = held[i];
+		if( !pb_is_transferable( w ) )
+			continue;
+		items[ items.size ] = w + "@" + self GetWeaponAmmoClip( w ) + "@" + self GetWeaponAmmoStock( w );
+	}
+
+	current = self GetCurrentWeapon();
+	if( !pb_is_transferable( current ) )
+		current = "";
+
+	return "" + self.score + "~" + pb_or_dash( perks ) + "~" + pb_or_dash( pb_join( items, "." ) ) + "~" + pb_or_dash( current );
+}
+
+pb_get_perks()
+{
+	owned = [];
+	known = pb_known_perks();
+	for( i = 0; i < known.size; i++ )
+	{
+		if( self HasPerk( known[i] ) )
+			owned[ owned.size ] = known[i];
+	}
+	return owned;
+}
+
+pb_is_transferable( w )
+{
+	if( !isDefined( w ) || w == "" || w == "none" )
+		return false;
+
+	blocked = [];
+	blocked[ blocked.size ] = "perk_bottle";
+	blocked[ blocked.size ] = "syrette";
+	blocked[ blocked.size ] = "knuckle";
+	blocked[ blocked.size ] = "zombie_melee";
+	blocked[ blocked.size ] = "bowie";
+	blocked[ blocked.size ] = "sickle";
+	blocked[ blocked.size ] = "falling_hands";
+	blocked[ blocked.size ] = "fists";
+	for( i = 0; i < blocked.size; i++ )
+	{
+		if( isSubStr( w, blocked[i] ) )
+			return false;
+	}
+	return true;
+}
+
+// -----------------------------------------------------------------------------
+//  Arrival
+// -----------------------------------------------------------------------------
+
+pb_arrive( state )
+{
+	data = pb_decode_state( state );
+	if( !isDefined( data ) )
+	{
+		iPrintLn( "Portal Bridge: ignoring malformed arrival state." );
+		return;
+	}
+	if( data.dst_map != level.pb_mapname )
+		return;
+
+	level thread pb_apply_round( data.round );
+
+	players = get_players();
+	for( i = 0; i < players.size; i++ )
+		players[i] thread pb_arrival_player( data.players[i], data.src_label );
+}
+
+pb_decode_state( state )
+{
+	parts = strTok( state, "|" );
+	if( parts.size < 2 || parts[0] != "PB1" )
+		return undefined;
+
+	data = spawnStruct();
+	data.round = 1;
+	data.dst_map = "";
+	data.src_label = "another dimension";
+	data.players = [];
+
+	for( i = 1; i < parts.size; i++ )
+	{
+		kv = strTok( parts[i], "=" );
+		if( kv.size != 2 )
+			continue;
+		key = kv[0];
+		val = kv[1];
+
+		if( key == "dst" )
+		{
+			gm = strTok( val, ":" );
+			if( gm.size == 2 )
+				data.dst_map = gm[1];
+		}
+		else if( key == "src" )
+		{
+			gm = strTok( val, ":" );
+			if( gm.size == 2 )
+				data.src_label = pb_map_label( gm[0], gm[1] );
+		}
+		else if( key == "r" )
+		{
+			data.round = int( val );
+		}
+		else if( getSubStr( key, 0, 1 ) == "p" )
+		{
+			data.players[ int( getSubStr( key, 1 ) ) ] = pb_decode_player( val );
+		}
+	}
+	return data;
+}
+
+pb_decode_player( val )
+{
+	f = strTok( val, "~" );
+	if( f.size < 4 )
+		return undefined;
+
+	p = spawnStruct();
+	p.score = int( f[0] );
+
+	p.perks = [];
+	if( f[1] != "-" )
+		p.perks = strTok( f[1], "." );
+
+	p.weapons = [];
+	if( f[2] != "-" )
+	{
+		items = strTok( f[2], "." );
+		for( i = 0; i < items.size; i++ )
+		{
+			w = strTok( items[i], "@" );
+			if( w.size != 3 )
+				continue;
+			entry = spawnStruct();
+			entry.candidates = strTok( w[0], ":" );
+			entry.clip = int( w[1] );
+			entry.stock = int( w[2] );
+			p.weapons[ p.weapons.size ] = entry;
+		}
+	}
+
+	p.current = [];
+	if( f[3] != "-" )
+		p.current = strTok( f[3], ":" );
+
+	return p;
+}
+
+pb_map_label( game_id, map_id )
+{
+	for( i = 0; i < level.pb_maps.size; i++ )
+	{
+		if( level.pb_maps[i].game_id == game_id && level.pb_maps[i].id == map_id )
+			return level.pb_maps[i].label;
+	}
+	return map_id;
+}
+
+pb_arrival_player( p, src_label )
+{
+	self endon( "disconnect" );
+
+	// Wait for the map to hand out the starting loadout before replacing it.
+	waited = 0;
+	while( waited < 30 && ( !isDefined( self.sessionstate ) || self.sessionstate != "playing" || self GetWeaponsListPrimaries().size == 0 ) )
+	{
+		wait 0.1;
+		waited += 0.1;
+	}
+
+	self thread pb_flash( 1, 0, 1.5 );
+	wait 0.5;
+
+	if( !isDefined( p ) )
+		return;
+
+	self pb_set_score( p.score );
+
+	for( i = 0; i < p.perks.size; i++ )
+	{
+		// Check the perk exists in this game before HasPerk sees an unknown name.
+		perk = p.perks[i];
+		if( !pb_perk_available( perk ) )
+			continue;
+		if( !self HasPerk( perk ) )
+			self pb_give_perk( perk );
+	}
+
+	refund = 0;
+	resolved = [];
+	for( i = 0; i < p.weapons.size; i++ )
+	{
+		name = pb_resolve_weapon( p.weapons[i].candidates );
+		if( !isDefined( name ) || resolved.size >= self pb_max_primaries() )
+		{
+			refund += level.pb_settings.weapon_refund;
+			continue;
+		}
+		entry = spawnStruct();
+		entry.name = name;
+		entry.clip = p.weapons[i].clip;
+		entry.stock = p.weapons[i].stock;
+		resolved[ resolved.size ] = entry;
+	}
+
+	if( resolved.size > 0 )
+	{
+		old = self GetWeaponsListPrimaries();
+		for( i = 0; i < old.size; i++ )
+			self TakeWeapon( old[i] );
+
+		for( i = 0; i < resolved.size; i++ )
+		{
+			w = resolved[i].name;
+			clip = resolved[i].clip;
+			if( clip > WeaponClipSize( w ) )
+				clip = WeaponClipSize( w );
+			stock = resolved[i].stock;
+			if( stock > WeaponMaxAmmo( w ) )
+				stock = WeaponMaxAmmo( w );
+
+			self GiveWeapon( w );
+			self SetWeaponAmmoClip( w, clip );
+			self SetWeaponAmmoStock( w, stock );
+		}
+
+		target = resolved[0].name;
+		current = pb_resolve_weapon( p.current );
+		for( i = 0; i < resolved.size; i++ )
+		{
+			if( isDefined( current ) && resolved[i].name == current )
+				target = current;
+		}
+		self SwitchToWeapon( target );
+	}
+
+	if( refund > 0 )
+	{
+		self pb_set_score( self.score + refund );
+		self iPrintLn( "Some weapons don't exist here - refunded " + refund + " points." );
+	}
+
+	self iPrintLnBold( "Arrived from " + src_label + "." );
+}
+
+// First candidate that this map actually has, falling back to known aliases.
+pb_resolve_weapon( candidates )
+{
+	valid = pb_valid_weapons();
+
+	for( i = 0; i < candidates.size; i++ )
+	{
+		if( isDefined( valid[ candidates[i] ] ) )
+			return candidates[i];
+	}
+
+	for( i = 0; i < candidates.size; i++ )
+	{
+		for( g = 0; g < level.pb_weapon_aliases.size; g++ )
+		{
+			group = strTok( level.pb_weapon_aliases[g], " " );
+			if( !pb_array_contains( group, candidates[i] ) )
+				continue;
+			for( j = 0; j < group.size; j++ )
+			{
+				if( isDefined( valid[ group[j] ] ) )
+					return group[j];
+			}
+		}
+	}
+	return undefined;
+}
+
+// Weapons this map has registered (and therefore precached).
+pb_valid_weapons()
+{
+	if( isDefined( level.pb_valid_weapons ) )
+		return level.pb_valid_weapons;
+
+	valid = [];
+	if( isDefined( level.zombie_weapons ) )
+	{
+		keys = getArrayKeys( level.zombie_weapons );
+		for( i = 0; i < keys.size; i++ )
+		{
+			valid[ keys[i] ] = true;
+			if( isDefined( level.zombie_weapons[ keys[i] ].upgrade_name ) )
+				valid[ level.zombie_weapons[ keys[i] ].upgrade_name ] = true;
+		}
+	}
+	if( isDefined( level.zombie_include_weapons ) )
+	{
+		keys = getArrayKeys( level.zombie_include_weapons );
+		for( i = 0; i < keys.size; i++ )
+			valid[ keys[i] ] = true;
+	}
+
+	level.pb_valid_weapons = valid;
+	return valid;
+}
+
+pb_perk_available( perk )
+{
+	if( !pb_array_contains( pb_known_perks(), perk ) )
+		return false;
+	if( !level.pb_settings.perks_require_machine )
+		return true;
+
+	machines = getEntArray( "zombie_vending", "targetname" );
+	for( i = 0; i < machines.size; i++ )
+	{
+		if( isDefined( machines[i].script_noteworthy ) && machines[i].script_noteworthy == perk )
+			return true;
+	}
+	return false;
+}
+
+// Jumps the game to `target` by ending round 1 early with the round counter
+// set to target - 1, so the map's own round logic rolls over into `target`.
+pb_apply_round( target )
+{
+	if( target <= 1 )
+		return;
+
+	waited = 0;
+	while( !isDefined( level.round_number ) || !isDefined( level.zombie_total ) || ( level.zombie_total <= 0 && pb_enemy_count() == 0 ) )
+	{
+		wait 0.25;
+		waited += 0.25;
+		if( waited > 90 )
+			return;
+	}
+
+	level.round_number = target - 1;
+	level.zombie_health = pb_health_for_round( target - 1 );
+	pb_after_round_skip( target );
+
+	// Keep the leftover round-1 horde cleared until the round rolls over.
+	waited = 0;
+	while( level.round_number == target - 1 && waited < 30 )
+	{
+		if( level.zombie_total > 0 )
+			level.zombie_total = 0;
+		pb_kill_all_zombies();
+		wait 0.5;
+		waited += 0.5;
+	}
+}
+
+pb_health_for_round( round )
+{
+	health = 150;
+	increase = 100;
+	percent = 10;
+	if( isDefined( level.zombie_vars ) )
+	{
+		if( isDefined( level.zombie_vars[ "zombie_health_start" ] ) )
+			health = level.zombie_vars[ "zombie_health_start" ];
+		if( isDefined( level.zombie_vars[ "zombie_health_increase" ] ) )
+			increase = level.zombie_vars[ "zombie_health_increase" ];
+		if( isDefined( level.zombie_vars[ "zombie_health_increase_percent" ] ) )
+			percent = level.zombie_vars[ "zombie_health_increase_percent" ];
+	}
+
+	for( r = 2; r <= round; r++ )
+	{
+		if( r >= 10 )
+			health = health + int( health * percent / 100 );
+		else
+			health = health + increase;
+
+		// Past round ~160 the real game overflows; cap instead.
+		if( health > 1000000000 )
+			return 1000000000;
+	}
+	return health;
+}
+
+pb_enemy_count()
+{
+	return getAiArray( "axis" ).size;
+}
+
+pb_kill_all_zombies()
+{
+	zombies = getAiArray( "axis" );
+	for( i = 0; i < zombies.size; i++ )
+	{
+		if( !isAlive( zombies[i] ) )
+			continue;
+		zombies[i].no_powerups = true;
+		zombies[i] doDamage( zombies[i].health + 666, zombies[i].origin );
+	}
+}
+
+// -----------------------------------------------------------------------------
+//  Helpers
+// -----------------------------------------------------------------------------
+
+pb_dist2d( a, b )
+{
+	return distance( ( a[0], a[1], 0 ), ( b[0], b[1], 0 ) );
+}
+
+pb_join( list, sep )
+{
+	out = "";
+	for( i = 0; i < list.size; i++ )
+	{
+		if( i > 0 )
+			out = out + sep;
+		out = out + list[i];
+	}
+	return out;
+}
+
+pb_or_dash( s )
+{
+	if( s == "" )
+		return "-";
+	return s;
+}
+
+pb_array_contains( list, value )
+{
+	for( i = 0; i < list.size; i++ )
+	{
+		if( list[i] == value )
+			return true;
+	}
+	return false;
+}

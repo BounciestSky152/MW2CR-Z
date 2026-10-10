@@ -1,0 +1,12 @@
+[project]
+name = "portal-bridge"
+version = "0.1.0"
+description = "Portal travel between Call of Duty: World at War and Black Ops zombies maps"
+requires-python = ">=3.9"
+readme = "README.md"
+
+[project.scripts]
+portal-bridge = "portal_bridge.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
