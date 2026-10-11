@@ -139,6 +139,9 @@ started from its own folder.
 
 ## 4. Proton method (Mod Tools build)
 
+> **Skip this section if you used Plutonium (§3).** It is an alternative, not an extra step. Running it anyway can
+> switch your Steam prefix to a different Proton.
+
 Use this if you'd rather run the stock Steam games with a compiled `mod.ff`. You need the Steam client running,
 because both exes use Steam DRM, and you need to build the mod yourself.
 
@@ -205,6 +208,8 @@ find ~ /mnt /media /run/media -iname 'console*.log' -mmin -60 2>/dev/null
 
 ## 5. Steam method (Flatpak or Snap Steam)
 
+> **Skip this section if you used Plutonium (§3).**
+
 Flatpak Steam runs in a sandbox with its own shared memory. A game the bridge starts from outside that sandbox
 most likely can't reach the Steam client for its DRM check *(unverified, but expected)*. In that case, let Steam
 start the game:
@@ -231,6 +236,8 @@ library, with no file present, starts the plain game.
 - You still need `mod.ff` for WaW (see §4).
 
 ## 6. Playing
+
+Run this from the `WAW-BO1-Portal-Bridge` folder; elsewhere Python reports `No module named portal_bridge`.
 
 ```bash
 python3 -m portal_bridge run --start waw:nazi_zombie_factory

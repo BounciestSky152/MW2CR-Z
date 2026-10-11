@@ -143,7 +143,8 @@ def plan_linux_setup(
             )
         if method != "steam":
             plan.notes.append(
-                f"{label}: install the XACT sound library once or some sounds are missing: protontricks {inst.app_id} xact"
+                f"{label}: install the XACT sound library once or some sounds are missing: protontricks "
+                f"{Path(cfg.get('env', {}).get('STEAM_COMPAT_DATA_PATH', inst.compatdata)).name} xact"
             )
 
     if any(m in ("proton", "steam") for m in methods.values()):
