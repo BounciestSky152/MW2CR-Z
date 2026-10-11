@@ -56,6 +56,70 @@ def _cmd_run(config, args) -> int:
     return 0
 
 
+def _looks_like_path(value: str) -> bool:
+    return value.startswith(("/", "~")) or (len(value) > 2 and value[1] == ":")
+
+
+def _cmd_doctor(config, args) -> int:
+    """Check every path in the config and say what's wrong."""
+    import shutil
+
+    launcher = GameLauncher(config, dry_run=True)
+    problems = 0
+
+    def check(ok: bool, label: str, hint: str = "") -> None:
+        nonlocal problems
+        print(f"  [{'ok' if ok else '!!'}] {label}")
+        if not ok:
+            problems += 1
+            if hint:
+                print(f"       -> {hint}")
+
+    if not sys.platform.startswith("win"):
+        for tool in ("pgrep", "pkill"):
+            check(shutil.which(tool) is not None, f"`{tool}` is installed", "install procps (procps-ng)")
+
+    for game, cfg in config.games.items():
+        print(f"{cfg.label} ({game})")
+        game_dir = launcher.game_dir(game)
+        check(bool(game_dir) and Path(game_dir).is_dir(), f"game_dir {game_dir}",
+              "set games.%s.game_dir in config/bridge.local.json" % game)
+
+        command = launcher.build_command(game, "MAP")
+        if command and _looks_like_path(command[0]):
+            check(Path(command[0]).is_file(), f"launcher {command[0]}")
+        elif command:
+            check(shutil.which(command[0]) is not None, f"`{command[0]}` is on PATH")
+        for arg in command[1:]:
+            if arg.lower().endswith(".exe") and _looks_like_path(arg):
+                check(Path(arg).is_file(), f"game exe {arg}")
+
+        for key, value in launcher.build_env(game).items():
+            if _looks_like_path(value):
+                check(Path(value).exists(), f"env {key}={value}",
+                      "for STEAM_COMPAT_DATA_PATH, start the game from Steam once so Proton creates it")
+
+        mod = Path(game_dir) / "mods" / "portal_bridge" if game_dir else None
+        if mod is not None:
+            has_mod = (mod / "mod.ff").is_file()
+            print(f"  [{'ok' if has_mod else '--'}] built mod.ff in {mod}"
+                  + ("" if has_mod else "  (fine if you use the Plutonium route instead)"))
+
+        logs = launcher.log_paths(game)
+        existing = [p for p in logs if p.is_file()]
+        for p in logs:
+            print(f"  [{'ok' if p.is_file() else '--'}] log {p}")
+        if not existing:
+            print("       -> no console.log yet; that's normal before the first launch with the mod.")
+            print("          After one, if it still isn't listed, find it with:")
+            print("          find ~ /mnt /media -name console.log -path '*portal_bridge*' 2>/dev/null"
+                  if not sys.platform.startswith("win") else
+                  "          dir /s /b %LOCALAPPDATA%\\console.log")
+
+    print("no problems found" if problems == 0 else f"{problems} problem(s) found")
+    return 0 if problems == 0 else 1
+
+
 def _cmd_simulate(config, args) -> int:
     """Feed one console-log line through the bridge without touching any game."""
     line = args.line
@@ -93,6 +157,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--start", metavar="GAME:MAP", help="launch this map first")
     p.add_argument("--dry-run", action="store_true", help="log what would happen instead of starting/killing games")
     p.set_defaults(func=_cmd_run)
+
+    sub.add_parser("doctor", help="check game paths, launchers and log locations").set_defaults(func=_cmd_doctor)
 
     p = sub.add_parser("simulate", help="process one travel request as if the game had printed it")
     p.add_argument("line", help="a PB1|... state string or a full console log line")

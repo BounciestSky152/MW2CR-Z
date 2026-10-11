@@ -1,7 +1,6 @@
 """Tails the games' console logs for lines written by pb_emit()."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 
@@ -70,7 +69,3 @@ class LogTailer:
         *complete, rest = data.split(b"\n")
         self._partial[path] = rest
         return [line.decode("utf-8", "replace").rstrip("\r") for line in complete]
-
-
-def expand_path(template: str, game_dir: str) -> Path:
-    return Path(os.path.expandvars(template.replace("{game_dir}", game_dir)))

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,25 @@ DISPLAY_RE = re.compile(r"^[A-Za-z0-9 '()\-.:!&,]+$")
 
 class ConfigError(ValueError):
     pass
+
+
+def wine_path(path: str) -> str:
+    """/home/me/Games/WaW -> Z:\\home\\me\\Games\\WaW (Wine maps Z: to /)."""
+    if len(path) >= 2 and path[1] == ":":
+        return path.replace("/", "\\")
+    return "Z:" + path.replace("/", "\\")
+
+
+def expand(template: str, game_dir: str = "", map_id: str = "") -> str:
+    """Fill {game_dir} / {game_dir_win} / {map}, then expand ~ and $VARS
+    (%VARS% too on Windows)."""
+    game_dir = os.path.expanduser(os.path.expandvars(game_dir))
+    out = (
+        template.replace("{game_dir_win}", wine_path(game_dir))
+        .replace("{game_dir}", game_dir)
+        .replace("{map}", map_id)
+    )
+    return os.path.expanduser(os.path.expandvars(out))
 
 
 @dataclass(frozen=True)
@@ -42,6 +62,7 @@ class GameConfig:
     launch: tuple[str, ...]
     process_names: tuple[str, ...]
     logs: tuple[str, ...]
+    env: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass
@@ -119,6 +140,7 @@ def load_config(config_dir: Path | str | None = None) -> Config:
             launch=tuple(raw.get("launch", [])),
             process_names=tuple(raw.get("process_names", [])),
             logs=tuple(raw.get("logs", [])),
+            env=tuple((str(k), str(v)) for k, v in raw.get("env", {}).items()),
         )
 
     maps: list[MapEntry] = []
