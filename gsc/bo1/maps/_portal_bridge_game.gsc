@@ -3,7 +3,12 @@
 //
 //  Everything that differs between WaW and BO1 zombies lives in this file so
 //  the core script compiles unchanged in both games.
+//
+//  Calls into the stock scripts go through the pb_x_* wrappers generated into
+//  maps\_portal_bridge_platform.gsc, because Plutonium's loose-script loader
+//  can't compile direct references into the zombiemode scripts.
 // =============================================================================
+#include maps\_portal_bridge_platform;
 
 pb_game_id()
 {
@@ -38,14 +43,14 @@ pb_set_score( target )
 		target = 0;
 	diff = target - self.score;
 	if( diff > 0 )
-		self maps\_zombiemode_score::add_to_player_score( diff );
+		self pb_x_add_to_player_score( diff );
 	else if( diff < 0 )
-		self maps\_zombiemode_score::minus_to_player_score( 0 - diff );
+		self pb_x_minus_to_player_score( 0 - diff );
 }
 
 pb_give_perk( perk )
 {
-	self maps\_zombiemode_perks::give_perk( perk, false );
+	self pb_x_give_perk( perk, false );
 }
 
 pb_max_primaries()
@@ -64,16 +69,4 @@ pb_after_round_skip( round )
 		level.next_monkey_round = round + randomIntRange( 4, 7 );
 	if( isDefined( level.next_thief_round ) && level.next_thief_round <= round )
 		level.next_thief_round = round + randomIntRange( 4, 7 );
-}
-
-pb_engine_changelevel( mapname )
-{
-	changelevel( mapname, false );
-}
-
-// Needs developer_script 1 and logfile 1/2 so it reaches the console log the
-// bridge tails (the bridge's default launch arguments set both).
-pb_emit( line )
-{
-	println( line );
 }

@@ -1,7 +1,14 @@
-"""Tails the games' console logs for lines written by pb_emit()."""
+"""Watches for lines written by pb_emit(): appended to a console log (Mod
+Tools route) or written as a small file the game rewrites each time
+(Plutonium's fs_* API, the "signal file")."""
 from __future__ import annotations
 
+import time
 from pathlib import Path
+
+# A signal file without a trailing newline counts as complete once it has
+# stopped changing for this long.
+SETTLE_NS = 1_000_000_000
 
 
 class LogTailer:
@@ -10,8 +17,23 @@ class LogTailer:
         self._offsets: dict[Path, int] = {}
         self._ids: dict[Path, tuple[int, int]] = {}
         self._partial: dict[Path, bytes] = {}
+        self.signals: list[Path] = []
+        self._signal_stamp: dict[Path, tuple | None] = {}
         for p in paths or []:
             self.add(p)
+
+    def add_signal(self, path: Path) -> None:
+        path = Path(path)
+        if path not in self.signals:
+            self.signals.append(path)
+
+    @staticmethod
+    def _stamp(path: Path) -> tuple | None:
+        try:
+            st = path.stat()
+        except OSError:
+            return None
+        return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
 
     def add(self, path: Path) -> None:
         path = Path(path)
@@ -21,8 +43,14 @@ class LogTailer:
     def prime(self, paths: list[Path] | None = None) -> None:
         """Skip whatever is already in the files, so stale requests from an
         earlier session are never replayed."""
+        if paths is None:
+            for sig in self.signals:
+                self._signal_stamp[sig] = self._stamp(sig)
         for path in paths if paths is not None else self.paths:
             path = Path(path)
+            if path in self.signals:
+                self._signal_stamp[path] = self._stamp(path)
+                continue
             self.add(path)
             try:
                 st = path.stat()
@@ -38,7 +66,25 @@ class LogTailer:
         lines: list[str] = []
         for path in self.paths:
             lines.extend(self._poll_one(path))
+        for path in self.signals:
+            lines.extend(self._poll_signal(path))
         return lines
+
+    def _poll_signal(self, path: Path) -> list[str]:
+        stamp = self._stamp(path)
+        if stamp is None or stamp == self._signal_stamp.get(path):
+            return []
+        try:
+            data = path.read_bytes()
+        except OSError:
+            return []
+        # Only remember the stamp once a full line is there, in case we caught
+        # the game halfway through writing.
+        if not data.endswith(b"\n") and stamp[3] > time.time_ns() - SETTLE_NS:
+            return []
+        self._signal_stamp[path] = stamp
+        text = data.decode("utf-8", "replace")
+        return [line.rstrip("\r") for line in text.split("\n") if line.strip()]
 
     def _poll_one(self, path: Path) -> list[str]:
         try:

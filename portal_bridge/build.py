@@ -1,7 +1,9 @@
 """Generates the installable GSC for each game from gsc/ and config/.
 
-dist/<game>/mods/portal_bridge/   -> mod-tools layout (compile into mod.ff)
-dist/<game>/plutonium/scripts/sp/ -> single-file bundle for Plutonium's script loader
+dist/<game>/mods/portal_bridge/   Mod Tools layout (compile into mod.ff)
+dist/<game>/plutonium/storage/... single-file bundle for Plutonium's loose
+                                  script loader, laid out like Plutonium's own
+                                  storage folder so it can be copied over it
 """
 from __future__ import annotations
 
@@ -79,6 +81,96 @@ def generate_catalog(config: Config, game: str) -> str:
     return "".join(out)
 
 
+ROUTES = ("modtools", "plutonium")
+
+# Where Plutonium loads loose zombies scripts from. T5's scripts/sp/zom only
+# runs in zombies; scripts/sp would also run on the main menu and campaign.
+PLUTONIUM_SCRIPT_DIRS = {"waw": "storage/t4/raw/scripts/sp", "bo1": "storage/t5/scripts/sp/zom"}
+PLUTONIUM_SCRIPTDATA = {"waw": "storage/t4/raw/scriptdata", "bo1": "storage/t5/raw/scriptdata"}
+SIGNAL_FILE = "portal_bridge_travel.txt"
+
+# Stock-script functions the adapters call: (script, function, arg count,
+# returns a value). Each becomes a pb_x_<function> wrapper in the platform file.
+STOCK_CALLS = {
+    "waw": [
+        ("maps/_zombiemode_score", "add_to_player_score", 1, False),
+        ("maps/_zombiemode_score", "minus_to_player_score", 1, False),
+        ("maps/_zombiemode_perks", "perk_hud_create", 1, False),
+        ("maps/_zombiemode_perks", "perk_think", 1, False),
+        ("maps/_laststand", "player_is_in_laststand", 0, True),
+    ],
+    "bo1": [
+        ("maps/_zombiemode_score", "add_to_player_score", 1, False),
+        ("maps/_zombiemode_score", "minus_to_player_score", 1, False),
+        ("maps/_zombiemode_perks", "give_perk", 2, False),
+        ("maps/_laststand", "player_is_in_laststand", 0, True),
+    ],
+}
+
+
+def _stock_wrapper(path: str, func: str, argc: int, returns: bool, route: str) -> str:
+    params = ", ".join(f"a{i}" for i in range(argc))
+    sig = f"pb_x_{func}( {params} )" if params else f"pb_x_{func}()"
+    call_args = f"( {params} )" if params else "()"
+    if route == "modtools":
+        target = path.replace("/", "\\")
+        body = f"\t{'return ' if returns else ''}self {target}::{func}{call_args};\n"
+    else:
+        body = f'\tf = pb_stock( "{path}", "{func}" );\n'
+        if returns:
+            body += "\tif( !isDefined( f ) )\n\t\treturn false;\n"
+            body += f"\treturn self [[ f ]]{call_args};\n"
+        else:
+            body += f"\tif( isDefined( f ) )\n\t\tself [[ f ]]{call_args};\n"
+    return f"{sig}\n{{\n{body}}}\n"
+
+
+def generate_platform(game: str, route: str) -> str:
+    """Everything that differs between the Mod Tools build and the Plutonium
+    loose-script build."""
+    out = [GENERATED_HEADER]
+    if route == "modtools":
+        out.append(
+            "// Mod Tools build: compiled into mod.ff next to the stock scripts.\n\n"
+            "// Reaches the bridge through the console log, so the game must run with\n"
+            "// developer_script 1 and logfile 1/2 (the bridge's launch arguments set both).\n"
+            "pb_emit( line )\n{\n\tprintln( line );\n}\n\n"
+            "pb_spawn_model( origin )\n{\n"
+            '\tm = spawn( "script_model", origin );\n'
+            '\tm setModel( "tag_origin" );\n'
+            "\treturn m;\n}\n\n"
+            "pb_engine_changelevel( mapname )\n{\n\tchangelevel( mapname, false );\n\treturn true;\n}\n"
+        )
+    else:
+        out.append(
+            "// Plutonium build: a loose script, compiled when the game starts. It can't\n"
+            "// reference the zombiemode scripts directly (they aren't loaded yet), so\n"
+            "// stock functions are looked up by name once a map is running.\n\n"
+            "// println doesn't reach any log on Plutonium; its file API writes to\n"
+            f"// <Plutonium>/{PLUTONIUM_SCRIPTDATA[game]}/, which the bridge watches.\n"
+            "pb_emit( line )\n{\n"
+            f'\tf = fs_fopen( "{SIGNAL_FILE}", "write" );\n'
+            "\tfs_writeline( f, line );\n"
+            "\tfs_fclose( f );\n}\n\n"
+            "pb_spawn_model( origin )\n{\n"
+            '\tm = spawn( "script_model", origin );\n'
+            '\tm setModel( "tag_origin" );\n'
+            "\treturn m;\n}\n\n"
+            "// Same-game trips go through the bridge too.\n"
+            "pb_engine_changelevel( mapname )\n{\n\treturn false;\n}\n\n"
+            "pb_stock( path, name )\n{\n"
+            "\tif( !isDefined( level.pb_stock ) )\n\t\tlevel.pb_stock = [];\n"
+            '\tkey = path + "::" + name;\n'
+            "\tif( !isDefined( level.pb_stock[ key ] ) )\n"
+            "\t\tlevel.pb_stock[ key ] = getFunction( path, name );\n"
+            "\treturn level.pb_stock[ key ];\n}\n"
+        )
+    out.append("\n// Calls into the stock zombies scripts.\n")
+    for path, func, argc, returns in STOCK_CALLS[game]:
+        out.append("\n" + _stock_wrapper(path, func, argc, returns, route))
+    return "".join(out)
+
+
 def bundle(sources: list[str]) -> str:
     """Merge core + adapter + catalog into one file for loaders that only take a
     single script: drop the cross-file includes, keep the stock ones."""
@@ -96,8 +188,14 @@ def bundle(sources: list[str]) -> str:
 MOD_CSV = """rawfile,maps/_portal_bridge.gsc
 rawfile,maps/_portal_bridge_game.gsc
 rawfile,maps/_portal_bridge_catalog.gsc
+rawfile,maps/_portal_bridge_platform.gsc
 rawfile,maps/_zombiemode.gsc
 """
+
+SCRIPTDATA_NOTE = (
+    "Portal Bridge: the zombies script writes portal_bridge_travel.txt here when you step\n"
+    "through a portal, and the bridge app picks it up. This folder must exist.\n"
+)
 
 
 def _write(path: Path, text: str) -> None:
@@ -124,6 +222,7 @@ def build(config: Config, out_dir: Path | str) -> list[Path]:
             ("_portal_bridge.gsc", core),
             ("_portal_bridge_game.gsc", adapter),
             ("_portal_bridge_catalog.gsc", catalog),
+            ("_portal_bridge_platform.gsc", generate_platform(game, "modtools")),
         ):
             path = mod_maps / name
             _write(path, text)
@@ -133,9 +232,14 @@ def build(config: Config, out_dir: Path | str) -> list[Path]:
         _write(csv, MOD_CSV)
         written.append(csv)
 
-        plut = game_out / "plutonium" / "scripts" / "sp" / "portal_bridge.gsc"
+        plut_root = game_out / "plutonium"
+        plut = plut_root / PLUTONIUM_SCRIPT_DIRS[game] / "portal_bridge.gsc"
         plut.parent.mkdir(parents=True)
-        _write(plut, bundle([core, adapter, catalog]))
+        _write(plut, bundle([core, adapter, catalog, generate_platform(game, "plutonium")]))
         written.append(plut)
+        note = plut_root / PLUTONIUM_SCRIPTDATA[game] / "portal_bridge_readme.txt"
+        note.parent.mkdir(parents=True)
+        _write(note, SCRIPTDATA_NOTE)
+        written.append(note)
 
     return written

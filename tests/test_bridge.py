@@ -94,6 +94,7 @@ def test_build_command_expands_placeholders():
     launcher = GameLauncher(config, dry_run=True)
     cmd = launcher.build_command("waw", "nazi_zombie_factory", "PB1|n=1")
     assert cmd[0].endswith("/CoDWaW.exe")
+    assert "{game_args}" not in cmd
     assert cmd[-2:] == ["+devmap", "nazi_zombie_factory"]
     i = cmd.index("pb_state")
     assert cmd[i - 1:i + 2] == ["+set", "pb_state", "PB1|n=1"]
@@ -106,4 +107,36 @@ def test_local_override_is_merged(tmp_path):
     (tmp_path / "bridge.local.json").write_text(json.dumps({"games": {"bo1": {"game_dir": "D:/BO1"}}}))
     config = load_config(tmp_path)
     assert config.games["bo1"].game_dir == "D:/BO1"
-    assert config.games["bo1"].process_names == ("BlackOps.exe",)
+    assert config.games["bo1"].process_names == ("BlackOps.exe", "launcher_ldr.exe")
+
+
+def test_signal_file_is_read_whole_each_time_it_changes(tmp_path):
+    import os
+    sig = tmp_path / "portal_bridge_travel.txt"
+    sig.write_text(LINE.replace("n=77", "n=1") + "\n")  # left over from last session
+    tailer = LogTailer()
+    tailer.add_signal(sig)
+    tailer.prime()
+    assert tailer.poll() == []
+
+    sig.write_text(LINE.replace("n=77", "n=2") + "\n")  # same length, new content
+    st = sig.stat()
+    os.utime(sig, ns=(st.st_atime_ns, st.st_mtime_ns + 5_000_000))
+    out = tailer.poll()
+    assert len(out) == 1 and "n=2" in out[0]
+    assert tailer.poll() == []
+
+
+def test_bridge_reacts_to_plutonium_signal_file(tmp_path):
+    from dataclasses import replace
+    config = load_config()
+    sig = tmp_path / "scriptdata" / "portal_bridge_travel.txt"
+    for game in config.games:
+        config.games[game] = replace(config.games[game], logs=(), signal_files=(str(sig),))
+    launcher = FakeLauncher(config)
+    bridge = Bridge(config, launcher, log=lambda _: None)
+    bridge.tailer.prime()
+    sig.parent.mkdir()
+    sig.write_text(LINE + "\n")
+    assert bridge.poll_once() == 1
+    assert launcher.calls[-1][1:3] == ("bo1", "zombie_theater")

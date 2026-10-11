@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from portal_bridge.build import GSC_DIR, build, bundle, generate_catalog
+from portal_bridge.build import GSC_DIR, ROUTES, build, bundle, generate_catalog, generate_platform
 from portal_bridge.config import GAMES, load_config
 from portal_bridge.patcher import HOOK, patch_text
 
@@ -27,13 +27,16 @@ def defined_functions(src: str) -> set[str]:
     return {m.group(1) for m in FUNC_DEF_RE.finditer(strip_comments_and_strings(src))}
 
 
-def all_sources(game):
-    return [CORE, ADAPTERS[game], generate_catalog(load_config(), game)]
+def all_sources(game, route="modtools"):
+    return [CORE, ADAPTERS[game], generate_catalog(load_config(), game), generate_platform(game, route)]
 
 
-@pytest.mark.parametrize("game", GAMES)
-def test_brackets_balance(game):
-    for src in all_sources(game):
+COMBOS = [(g, r) for g in GAMES for r in ROUTES]
+
+
+@pytest.mark.parametrize("game,route", COMBOS)
+def test_brackets_balance(game, route):
+    for src in all_sources(game, route):
         code = strip_comments_and_strings(src)
         stack = []
         pairs = {")": "(", "]": "[", "}": "{"}
@@ -46,13 +49,13 @@ def test_brackets_balance(game):
         assert not stack
 
 
-@pytest.mark.parametrize("game", GAMES)
-def test_every_pb_call_is_defined(game):
+@pytest.mark.parametrize("game,route", COMBOS)
+def test_every_pb_call_is_defined(game, route):
     defined = set()
-    for src in all_sources(game):
+    for src in all_sources(game, route):
         defined |= defined_functions(src)
     called = set()
-    for src in all_sources(game):
+    for src in all_sources(game, route):
         called |= set(PB_CALL_RE.findall(strip_comments_and_strings(src)))
     assert called - defined == set()
 
@@ -61,9 +64,9 @@ def test_adapters_define_the_same_functions():
     assert defined_functions(ADAPTERS["waw"]) == defined_functions(ADAPTERS["bo1"])
 
 
-@pytest.mark.parametrize("game", GAMES)
-def test_no_unsupported_syntax(game):
-    for src in all_sources(game):
+@pytest.mark.parametrize("game,route", COMBOS)
+def test_no_unsupported_syntax(game, route):
+    for src in all_sources(game, route):
         code = strip_comments_and_strings(src)
         assert not re.search(r"\bforeach\b", code), "T4 has no foreach"
         assert "?" not in code, "GSC has no ternary operator"
@@ -71,9 +74,9 @@ def test_no_unsupported_syntax(game):
         assert not re.search(r"(?<![.\w])game\s*=", code)
 
 
-@pytest.mark.parametrize("game", GAMES)
-def test_statements_end_with_semicolons(game):
-    for src in all_sources(game):
+@pytest.mark.parametrize("game,route", COMBOS)
+def test_statements_end_with_semicolons(game, route):
+    for src in all_sources(game, route):
         for raw in strip_comments_and_strings(src).splitlines():
             line = raw.strip()
             if not line or line.startswith("#") or line in ("{", "}"):
@@ -84,18 +87,39 @@ def test_statements_end_with_semicolons(game):
 
 
 def test_bundle_is_self_contained():
-    out = bundle(all_sources("waw"))
+    out = bundle(all_sources("waw", "plutonium"))
     assert not re.search(r"#include\s+maps\\_portal_bridge", out)
     assert out.count("#include maps\\_utility;") == 1
     assert "pb_give_perk" in out and "pb_catalog_maps" in out
+
+
+@pytest.mark.parametrize("game", GAMES)
+def test_plutonium_build_never_references_zombiemode_scripts_directly(game):
+    """Plutonium compiles loose scripts before any map's zombiemode scripts are
+    loaded, so a direct maps\\_zombiemode_*:: reference stops the game at boot."""
+    code = strip_comments_and_strings(bundle(all_sources(game, "plutonium")))
+    assert "::" not in code.replace("::main", "")
+    assert "println" not in code
+    assert "fs_fopen" in code
+
+
+@pytest.mark.parametrize("game", GAMES)
+def test_modtools_build_has_no_plutonium_only_builtins(game):
+    code = "".join(strip_comments_and_strings(s) for s in all_sources(game, "modtools"))
+    for builtin in ("getFunction", "fs_fopen", "fs_writeline", "fs_fclose"):
+        assert builtin.lower() not in code.lower()
 
 
 def test_build_writes_both_layouts(tmp_path):
     written = {p.relative_to(tmp_path).as_posix() for p in build(load_config(), tmp_path)}
     for game in GAMES:
         assert f"{game}/mods/portal_bridge/maps/_portal_bridge.gsc" in written
-        assert f"{game}/plutonium/scripts/sp/portal_bridge.gsc" in written
-    assert "rawfile,maps/_zombiemode.gsc" in (tmp_path / "waw/mods/portal_bridge/mod.csv").read_text()
+        assert f"{game}/mods/portal_bridge/maps/_portal_bridge_platform.gsc" in written
+    assert "waw/plutonium/storage/t4/raw/scripts/sp/portal_bridge.gsc" in written
+    assert "bo1/plutonium/storage/t5/scripts/sp/zom/portal_bridge.gsc" in written
+    assert "waw/plutonium/storage/t4/raw/scriptdata/portal_bridge_readme.txt" in written
+    csv = (tmp_path / "waw/mods/portal_bridge/mod.csv").read_text()
+    assert "rawfile,maps/_zombiemode.gsc" in csv and "rawfile,maps/_portal_bridge_platform.gsc" in csv
 
 
 def test_patch_inserts_hook_first_in_main():

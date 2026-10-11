@@ -30,12 +30,15 @@ def wine_path(path: str) -> str:
     return "Z:" + path.replace("/", "\\")
 
 
-def expand(template: str, game_dir: str = "", map_id: str = "") -> str:
-    """Fill {game_dir} / {game_dir_win} / {map}, then expand ~ and $VARS
-    (%VARS% too on Windows)."""
+def expand(template: str, game_dir: str = "", map_id: str = "", extra: dict[str, str] | None = None) -> str:
+    """Fill {game_dir} / {game_dir_win} / {map} / {<var>} placeholders, then
+    expand ~ and $VARS (%VARS% too on Windows)."""
     game_dir = os.path.expanduser(os.path.expandvars(game_dir))
+    out = template
+    for key, value in (extra or {}).items():
+        out = out.replace("{" + key + "}", value)
     out = (
-        template.replace("{game_dir_win}", wine_path(game_dir))
+        out.replace("{game_dir_win}", wine_path(game_dir))
         .replace("{game_dir}", game_dir)
         .replace("{map}", map_id)
     )
@@ -56,13 +59,32 @@ class MapEntry:
 
 @dataclass(frozen=True)
 class GameConfig:
+    """One game's launch recipe. Placeholders usable in any string:
+    {game_dir}, {game_dir_win} (Z:\\... form for Wine), {map}, {token} (fresh
+    random hex per launch) and {<name>} for every entry in `vars`.
+    Whole-element tokens: "{game_args}" (in `launch`) and "{state_args}" (in
+    `game_args`)."""
+
     id: str
     label: str
     game_dir: str
     launch: tuple[str, ...]
     process_names: tuple[str, ...]
-    logs: tuple[str, ...]
+    logs: tuple[str, ...] = ()
+    game_args: tuple[str, ...] = ()
     env: tuple[tuple[str, str], ...] = ()
+    vars: tuple[tuple[str, str], ...] = ()
+    cwd: str = "{game_dir}"
+    # Files the game rewrites with one travel request (Plutonium's fs_* API)
+    # rather than a log that grows.
+    signal_files: tuple[str, ...] = ()
+    # When set, game_args are written here one per line instead of being put
+    # on the command line (the Steam -applaunch + wrapper-script method).
+    args_file: str = ""
+    # Steam app id to wait on after closing the game (Steam route only).
+    steam_app_id: str = ""
+    # Only kill processes in this Wine prefix (derived from env when empty).
+    wineprefix: str = ""
 
 
 @dataclass
@@ -140,8 +162,18 @@ def load_config(config_dir: Path | str | None = None) -> Config:
             launch=tuple(raw.get("launch", [])),
             process_names=tuple(raw.get("process_names", [])),
             logs=tuple(raw.get("logs", [])),
-            env=tuple((str(k), str(v)) for k, v in raw.get("env", {}).items()),
+            game_args=tuple(raw.get("game_args", [])),
+            env=tuple((str(k), str(v)) for k, v in (raw.get("env") or {}).items() if v is not None),
+            vars=tuple((str(k), str(v)) for k, v in (raw.get("vars") or {}).items() if v is not None),
+            cwd=raw.get("cwd", "{game_dir}"),
+            signal_files=tuple(raw.get("signal_files", [])),
+            args_file=raw.get("args_file", ""),
+            steam_app_id=str(raw.get("steam_app_id", "")),
+            wineprefix=raw.get("wineprefix", ""),
         )
+        g = games[game_id]
+        if g.game_args and not g.args_file and "{game_args}" not in g.launch:
+            raise ConfigError(f"games.{game_id}.launch must contain \"{{game_args}}\" when game_args is set")
 
     maps: list[MapEntry] = []
     seen: set[str] = set()

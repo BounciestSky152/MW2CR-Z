@@ -1,12 +1,16 @@
 {
-  "_comment": "Copy overrides into config/bridge.local.json (git-ignored) instead of editing this file. Keys there are deep-merged over this one.",
+  "_comment": [
+    "Copy overrides into config/bridge.local.json (git-ignored) instead of editing this file; keys there are deep-merged over this one.",
+    "Defaults below are for Windows with the official Mod Tools. On Linux run `python -m portal_bridge linux-setup` (see docs/LINUX.md).",
+    "Placeholders: {game_dir} {game_dir_win} {map} {token} {<vars entry>}; whole-element tokens {game_args} (in launch) and {state_args} (in game_args)."
+  ],
 
   "games": {
     "waw": {
       "label": "World at War",
       "game_dir": "C:/Program Files (x86)/Steam/steamapps/common/Call of Duty World at War",
-      "launch": [
-        "{game_dir}/CoDWaW.exe",
+      "launch": ["{game_dir}/CoDWaW.exe", "{game_args}"],
+      "game_args": [
         "+set", "fs_game", "mods/portal_bridge",
         "+set", "developer", "1",
         "+set", "developer_script", "1",
@@ -16,16 +20,18 @@
       ],
       "process_names": ["CoDWaW.exe"],
       "logs": [
-        "%LOCALAPPDATA%/Activision/CoDWaW/mods/portal_bridge/console.log",
         "{game_dir}/mods/portal_bridge/console.log",
-        "{game_dir}/main/console.log"
+        "{game_dir}/main/console.log",
+        "%LOCALAPPDATA%/Activision/CoDWaW/mods/portal_bridge/console.log"
       ]
     },
     "bo1": {
       "label": "Black Ops",
       "game_dir": "C:/Program Files (x86)/Steam/steamapps/common/Call of Duty Black Ops",
-      "launch": [
-        "{game_dir}/BlackOps.exe",
+      "_comment": "Stock BlackOps.exe can't load mods/<name>/mod.ff; LinkerMod's game_mod loader (launcher_ldr.exe + game_mod.dll in <game>/bin) is required for the Mod Tools route.",
+      "cwd": "{game_dir}/bin",
+      "launch": ["{game_dir}/bin/launcher_ldr.exe", "game_mod.dll", "../BlackOps.exe", "{game_args}"],
+      "game_args": [
         "+set", "fs_game", "mods/portal_bridge",
         "+set", "developer", "1",
         "+set", "developer_script", "1",
@@ -34,19 +40,19 @@
         "{state_args}",
         "+devmap", "{map}"
       ],
-      "process_names": ["BlackOps.exe"],
+      "process_names": ["BlackOps.exe", "launcher_ldr.exe"],
       "logs": [
         "{game_dir}/mods/portal_bridge/console.log",
-        "{game_dir}/main/console.log",
-        "%LOCALAPPDATA%/Activision/CoDBO/mods/portal_bridge/console.log"
+        "{game_dir}/main/console.log"
       ]
     }
   },
 
   "bridge": {
     "poll_interval": 0.25,
+    "kill_timeout_seconds": 20.0,
     "kill_wait_seconds": 3.0,
-    "max_weapon_candidates": 4
+    "max_weapon_candidates": 6
   },
 
   "gameplay": {

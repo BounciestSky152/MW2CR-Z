@@ -34,6 +34,8 @@ class Bridge:
         for game in config.games:
             for path in launcher.log_paths(game):
                 self.tailer.add(path)
+            for path in launcher.signal_paths(game):
+                self.tailer.add_signal(path)
 
     def start(self, entry: MapEntry) -> None:
         self._launch(entry, None)
@@ -74,7 +76,7 @@ class Bridge:
 
     def _launch(self, entry: MapEntry, payload: str | None) -> None:
         # Ignore whatever the destination's log already holds.
-        self.tailer.prime(self.launcher.log_paths(entry.game))
+        self.tailer.prime(self.launcher.log_paths(entry.game) + self.launcher.signal_paths(entry.game))
         self.launcher.launch(entry.game, entry.id, payload)
 
     def poll_once(self) -> int:
@@ -89,7 +91,7 @@ class Bridge:
         interval = float(self.config.bridge.get("poll_interval", 0.25))
         self.tailer.prime()
         self._log("Portal Bridge is watching for portals. Ctrl+C to quit.")
-        for path in self.tailer.paths:
+        for path in self.tailer.paths + self.tailer.signals:
             self._log(f"  watching {path}")
         while not stop.is_set():
             self.poll_once()
