@@ -201,7 +201,9 @@ def _plan_plutonium(plan, game, label, steam, inst, proton, candidates, player_n
         ],
         "game_args": ["+name", player_name, "{state_args}", "+devmap", "{map}"],
         "env": env,
-        "process_names": ["plutonium-bootstrapper-win32.exe"],
+        # The bootstrapper relaunches itself as the game process; t4sp.exe/t5sp.exe
+        # are listed in case a build names it after the game binary instead.
+        "process_names": ["plutonium-bootstrapper-win32.exe", f"{PLUTONIUM_GAME_IDS[game]}.exe"],
         "logs": [],
         "signal_files": [plutonium_signal_file(game)],
         "wineprefix": str(prefix),
