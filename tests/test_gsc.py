@@ -60,8 +60,17 @@ def test_every_pb_call_is_defined(game, route):
     assert called - defined == set()
 
 
-def test_adapters_define_the_same_functions():
-    assert defined_functions(ADAPTERS["waw"]) == defined_functions(ADAPTERS["bo1"])
+def test_both_adapters_provide_everything_the_core_needs_from_them():
+    core_calls = set(PB_CALL_RE.findall(strip_comments_and_strings(CORE))) - defined_functions(CORE)
+    shared = set()
+    for game in GAMES:
+        shared |= defined_functions(generate_catalog(load_config(), game))
+        for route in ROUTES:
+            shared |= defined_functions(generate_platform(game, route))
+    needed = core_calls - shared
+    assert needed  # sanity: the core does rely on the adapters
+    for game in GAMES:
+        assert needed <= defined_functions(ADAPTERS[game]), game
 
 
 @pytest.mark.parametrize("game,route", COMBOS)
@@ -101,6 +110,21 @@ def test_plutonium_build_never_references_zombiemode_scripts_directly(game):
     assert "::" not in code.replace("::main", "")
     assert "println" not in code
     assert "fs_fopen" in code
+
+
+def test_plutonium_bo1_build_never_calls_spawn_directly():
+    """An in-game test saw Plutonium T5 reject spawn() in scripts/sp/zom."""
+    code = strip_comments_and_strings(bundle(all_sources("bo1", "plutonium")))
+    assert not re.search(r"(?<![\w.])spawn\s*\(", code)
+    assert "spawn_model(" in code
+
+
+def test_no_stock_laststand_dependency():
+    for game in GAMES:
+        for route in ROUTES:
+            raw = "".join(all_sources(game, route))
+            code = strip_comments_and_strings(raw)
+            assert "maps\\_laststand" not in code and "maps/_laststand" not in raw.replace("//", "")
 
 
 @pytest.mark.parametrize("game", GAMES)

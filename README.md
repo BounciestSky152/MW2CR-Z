@@ -30,17 +30,19 @@ bridge gets as close as it can:
   `"same_game_changelevel": true`, the game swaps maps itself without restarting (see
   [Configuration](#configuration)).
 
-**I haven't been able to test this in-game.** The scripts were written from knowledge of the stock zombies
-scripts. The Python side has tests, and the GSC is statically checked for balanced brackets, functions that
-don't exist, and syntax the T4/T5 compilers can't handle. The first time you build the mod, watch for compile
-errors. The engine calls most likely to need adjusting are listed under
-[Troubleshooting](#troubleshooting).
+**This hasn't been run in-game yet.** Every stock function, field and weapon name the scripts use was checked
+against dumps of the real WaW and BO1 zombies scripts, with file and line numbers. Those dumps are
+[plutoniummod/t4-scripts](https://github.com/plutoniummod/t4-scripts),
+[t5-scripts](https://github.com/plutoniummod/t5-scripts) and the WaW Mod Tools `raw/` folder. The Python side
+has tests, and the GSC is statically checked for balanced brackets, functions that don't exist, and syntax the
+T4/T5 compilers can't handle. The first time you load it, watch for compile errors. The calls most likely to need
+adjusting are listed under [Troubleshooting](#troubleshooting).
 
 ## What carries over
 
 | Carries over | How |
 |---|---|
-| Round | The new map starts round 1, which then ends at once and rolls over into your round, with zombie health set to match. Dog, monkey and thief rounds are rescheduled after the jump. |
+| Round | The new map starts straight at your round. The round is set in the few seconds before round 1's first zombie spawns, the same way the games' own difficulty settings start later rounds. Zombie health, speed and spawn rate match that round. If that window is missed, round 1 is ended early instead. Dog and monkey rounds, which the games check for an exact round number, are rescheduled so they still happen. On Shi No Numa (WaW) they stop after a jump past round 7, because that map keeps its schedule where scripts can't reach it. |
 | Points | Exact. |
 | Perks | Given back if the destination map has that perk's machine and the game knows the perk. PhD Flopper doesn't exist in WaW, so it's lost going BO1→WaW. |
 | Weapons + ammo | Translated by `config/weapons.json`: the exact counterpart first (Thompson → `thompson_zm`), then a look-alike (Thompson → AK-74u on Kino). Pack-a-Punched guns stay upgraded when the destination has the upgraded version. Any gun with no match is refunded (1000 points by default). |
@@ -93,6 +95,11 @@ Then point the bridge at Plutonium in `config/bridge.local.json` (see step 3).
 
 ### 2b. Mod Tools route (do this once per game)
 
+> **WaW: Der Riese and custom maps only.** Each stock WaW map ships its own copy of `_zombiemode.gsc`, and the one in
+> the Mod Tools `raw/` folder is Der Riese's. The Nacht der Untoten in the Mod Tools also uses a separate
+> `_zombiemode_prototype.gsc`, so the hook never runs there. For the other three stock WaW maps, use Plutonium.
+> BO1 is fine: all its maps share one `_zombiemode.gsc`.
+
 1. Copy `dist/<game>/mods/portal_bridge/` into the game's `mods/` folder
    (e.g. `...\Call of Duty World at War\mods\portal_bridge\`).
 2. Copy the stock `raw\maps\_zombiemode.gsc` from your Mod Tools install into `mods\portal_bridge\maps\`, then add
@@ -120,7 +127,8 @@ Create `config/bridge.local.json`. Git ignores it, and it's merged over `bridge.
 }
 ```
 
-Plutonium example for WaW. Use `t5sp` and `storage/t5` for Black Ops:
+Plutonium example for WaW. For Black Ops use `t5sp` and `storage/t5`, and add `"+set", "zombiemode", "1"` to
+`game_args`:
 
 ```json
 {
@@ -159,7 +167,7 @@ Leave that window open while you play.
 | Change destination | Stand near the portal and tap **USE** |
 | Travel | Walk through the portal |
 
-The portal stays open for 90 seconds. Opening a new one replaces your old one. If nothing happens 20 seconds after
+The portal stays open for 90 seconds. Opening a new one replaces your old one. If nothing happens 10 seconds after
 you step through, the game unfreezes and tells you the bridge isn't running.
 
 Other commands:

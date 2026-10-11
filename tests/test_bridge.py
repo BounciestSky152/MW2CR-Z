@@ -42,7 +42,7 @@ def test_travel_swaps_games_and_translates(tmp_path):
     assert (kind, game, map_id) == ("launch", "bo1", "zombie_theater")
     state = decode(payload)
     assert state.round == 9
-    assert state.players[0].weapons[0].candidates[0] == "thompson_zm"
+    assert state.players[0].weapons[0].candidates[0] == "zombie_thompson"  # BO1 remakes reuse WaW names
     assert state.players[0].perks == ["specialty_armorvest"]
 
 

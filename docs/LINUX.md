@@ -153,6 +153,9 @@ two exes)*.
 
 ### Building `mod.ff` for WaW
 
+This route only works for **Der Riese** and custom maps. Every stock WaW map ships its own copy of
+`_zombiemode.gsc`, and the one in the Mod Tools is Der Riese's. For Nacht, Verrückt and Shi No Numa, use Plutonium.
+
 1. `python3 -m portal_bridge build`
 2. Install the WaW Mod Tools into the game folder (`steamapps/common/Call of Duty World at War`). They aren't on
    Steam; extract the official zips there.
@@ -271,7 +274,7 @@ and guns.
   script didn't load. Check Plutonium's log for a compile error:
   `…/Plutonium/storage/t5/main/console.log` (BO1) or `…/storage/t4/main/console.log` (WaW, *unverified path*).
 - Mod Tools route: see [Where the console log ends up](#where-the-console-log-ends-up).
-- The game says *"is the Portal Bridge app running?"* after 20 seconds: the bridge didn't see the request. Check it
+- The game says *"is the Portal Bridge app running?"* after 10 seconds: the bridge didn't see the request. Check it
   is running and watching the right files (it lists them when it starts).
 
 **The game doesn't start**

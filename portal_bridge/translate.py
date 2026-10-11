@@ -22,23 +22,37 @@ class WeaponTranslator:
         self.groups: list[dict[str, Any]] = weapons_cfg.get("groups", [])
         self.rules: dict[str, dict[str, str]] = weapons_cfg.get("upgrade_rules", {})
 
+    def _rules(self, game: str) -> list[dict[str, str]]:
+        return self.rules.get(game, {}).get("rules", [])
+
     def split_upgrade(self, name: str, game: str) -> tuple[str, bool]:
         """"ray_gun_upgraded_zm" -> ("ray_gun_zm", True) in BO1."""
-        rule = self.rules.get(game)
-        if not rule:
-            return name, False
-        up = rule.get("upgraded_suffix", "")
-        if up and name.endswith(up) and len(name) > len(up):
-            return name[: -len(up)] + rule.get("base_suffix", ""), True
+        for base, upgraded in self.rules.get(game, {}).get("exceptions", {}).items():
+            if name == upgraded:
+                return base, True
+        for rule in self._rules(game):
+            up = rule.get("upgraded_suffix", "")
+            if (name.startswith(rule.get("prefix", "")) and up and name.endswith(up)
+                    and len(name) > len(up)):
+                return name[: -len(up)] + rule.get("base_suffix", ""), True
         return name, False
 
-    def make_upgraded(self, base: str, game: str) -> str:
-        rule = self.rules.get(game)
-        if not rule:
-            return base
-        suffix = rule.get("base_suffix", "")
-        stem = base[: -len(suffix)] if suffix and base.endswith(suffix) else base
-        return stem + rule.get("upgraded_suffix", "")
+    def make_upgraded(self, base: str, game: str) -> str | None:
+        """The Pack-a-Punched name of `base` in `game`, or None if it has none."""
+        cfg = self.rules.get(game, {})
+        if base in cfg.get("no_upgrade", []):
+            return None
+        if base in cfg.get("exceptions", {}):
+            return cfg["exceptions"][base]
+        for rule in self._rules(game):
+            suffix = rule.get("base_suffix", "")
+            if not base.startswith(rule.get("prefix", "")):
+                continue
+            if suffix and not base.endswith(suffix):
+                continue
+            stem = base[: -len(suffix)] if suffix else base
+            return stem + rule.get("upgraded_suffix", "")
+        return None
 
     def find_group(self, name: str, game: str) -> dict[str, Any] | None:
         """The group listing `name` as a real weapon of `game`, preferring the
@@ -69,7 +83,7 @@ class WeaponTranslator:
             names = [base]
 
         if upgraded:
-            names = [self.make_upgraded(n, dst) for n in names] + names
+            names = [u for u in (self.make_upgraded(n, dst) for n in names) if u] + names
 
         return _dedupe(names)[:limit]
 

@@ -199,7 +199,10 @@ def _plan_plutonium(plan, game, label, steam, inst, proton, candidates, player_n
             "-lan",
             "{game_args}",
         ],
-        "game_args": ["+name", player_name, "{state_args}", "+devmap", "{map}"],
+        # BO1 runs campaign-only setup in zombies unless zombiemode is 1.
+        "game_args": ["+name", player_name]
+        + (["+set", "zombiemode", "1"] if game == "bo1" else [])
+        + ["{state_args}", "+devmap", "{map}"],
         "env": env,
         # The bootstrapper relaunches itself as the game process; t4sp.exe/t5sp.exe
         # are listed in case a build names it after the game binary instead.

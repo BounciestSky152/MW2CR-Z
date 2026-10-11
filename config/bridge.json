@@ -63,7 +63,7 @@
     "portal_height": 80,
     "portal_fx_points": 14,
     "enter_radius": 22,
-    "bridge_timeout": 20,
+    "bridge_timeout": 10,
     "weapon_refund": 1000,
     "perks_require_machine": true,
     "same_game_changelevel": false,

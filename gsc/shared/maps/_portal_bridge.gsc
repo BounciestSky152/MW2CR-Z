@@ -22,6 +22,13 @@
 #include maps\_portal_bridge_catalog;
 #include maps\_portal_bridge_platform;
 
+// Plutonium calls main() and/or init() of loose scripts; main() guards
+// against running twice.
+init()
+{
+	main();
+}
+
 main()
 {
 	mapname = toLower( getDvar( "mapname" ) );
@@ -167,7 +174,7 @@ pb_preselect( request )
 
 pb_try_open_portal()
 {
-	if( self pb_x_player_is_in_laststand() )
+	if( self pb_in_laststand() )
 		return;
 
 	if( level.pb_dests.size == 0 )
@@ -363,7 +370,7 @@ pb_is_entering( portal )
 {
 	if( !isDefined( self.sessionstate ) || self.sessionstate != "playing" )
 		return false;
-	if( self pb_x_player_is_in_laststand() )
+	if( self pb_in_laststand() )
 		return false;
 	if( abs( self.origin[2] - portal.origin[2] ) > 48 )
 		return false;
@@ -512,13 +519,16 @@ pb_depart( dest, owner )
 	if( isDefined( level.pb_departing ) )
 		return;
 	level.pb_departing = true;
+	level.pb_depart_failed = undefined;
 	level notify( "pb_departing" );
 
 	players = get_players();
 	for( i = 0; i < players.size; i++ )
 	{
+		players[i].pb_saved_ignoreme = players[i].ignoreme;
 		players[i] freezeControls( true );
 		players[i].ignoreme = true;
+		players[i] pb_protect( true );
 		players[i] thread pb_flash( 0, 1, 0.75 );
 		players[i] iPrintLnBold( "Stepping through to " + dest.label + "..." );
 	}
@@ -534,21 +544,41 @@ pb_depart( dest, owner )
 		setDvar( "pb_state", "" );
 	}
 
+	// Started before emitting, so a failed write can't leave everyone frozen.
+	level thread pb_depart_watchdog( owner );
+
 	// The Portal Bridge app watches for this line (console log or signal file,
 	// see pb_emit), closes this game and launches the destination with the
 	// state passed back in.
-	pb_emit( "[PORTAL_BRIDGE] TRAVEL " + state );
+	if( !pb_emit( "[PORTAL_BRIDGE] TRAVEL " + state ) )
+		level.pb_depart_failed = true;
+}
 
-	wait level.pb_settings.bridge_timeout;
+// Undo the departure if the bridge never closes this game.
+pb_depart_watchdog( owner )
+{
+	waited = 0;
+	while( waited < level.pb_settings.bridge_timeout && !isDefined( level.pb_depart_failed ) )
+	{
+		wait 0.25;
+		waited += 0.25;
+	}
 
-	// Still running, so nobody picked the request up.
+	message = "The portal collapsed - is the Portal Bridge app running?";
+	if( isDefined( level.pb_depart_failed ) )
+		message = "The portal collapsed - couldn't write the travel request (see the Portal Bridge docs).";
+
 	players = get_players();
 	for( i = 0; i < players.size; i++ )
 	{
 		players[i] freezeControls( false );
-		players[i].ignoreme = false;
+		players[i] pb_protect( false );
+		ignoreme = false;
+		if( isDefined( players[i].pb_saved_ignoreme ) )
+			ignoreme = players[i].pb_saved_ignoreme;
+		players[i].ignoreme = ignoreme;
 		players[i] thread pb_flash( 1, 0, 0.5 );
-		players[i] iPrintLnBold( "The portal collapsed - is the Portal Bridge app running?" );
+		players[i] iPrintLnBold( message );
 	}
 	if( isDefined( owner ) && isDefined( owner.pb_portal ) )
 		owner pb_close_portal();
@@ -591,13 +621,15 @@ pb_encode_player()
 	for( i = 0; i < held.size; i++ )
 	{
 		w = held[i];
-		if( !pb_is_transferable( w ) )
+		if( !pb_is_transferable( w ) || isSubStr( w, "m7_launcher" ) )
 			continue;
 		items[ items.size ] = w + "@" + self GetWeaponAmmoClip( w ) + "@" + self GetWeaponAmmoStock( w );
 	}
 
+	// GetCurrentWeapon can be an alt mode (rifle grenades), a perk bottle or
+	// other temporary weapon; only remember it if it's a real held primary.
 	current = self GetCurrentWeapon();
-	if( !pb_is_transferable( current ) )
+	if( !pb_is_transferable( current ) || !pb_array_contains( held, current ) || isSubStr( current, "m7_launcher" ) )
 		current = "";
 
 	return "" + self.score + "~" + pb_or_dash( perks ) + "~" + pb_or_dash( pb_join( items, "." ) ) + "~" + pb_or_dash( current );
@@ -625,8 +657,12 @@ pb_is_transferable( w )
 	blocked[ blocked.size ] = "syrette";
 	blocked[ blocked.size ] = "knuckle";
 	blocked[ blocked.size ] = "zombie_melee";
-	blocked[ blocked.size ] = "bowie";
-	blocked[ blocked.size ] = "sickle";
+	// Exact melee names: "bowie"/"sickle" alone would also block BO1's
+	// knife_ballistic_bowie_zm / knife_ballistic_sickle_zm.
+	blocked[ blocked.size ] = "bowie_knife";
+	blocked[ blocked.size ] = "sickle_knife";
+	blocked[ blocked.size ] = "_flourish";
+	blocked[ blocked.size ] = "equip_";
 	blocked[ blocked.size ] = "falling_hands";
 	blocked[ blocked.size ] = "fists";
 	for( i = 0; i < blocked.size; i++ )
@@ -653,6 +689,14 @@ pb_arrive( state )
 		return;
 
 	level thread pb_apply_round( data.round );
+
+	// Co-op clients still connecting aren't in get_players() yet.
+	waited = 0;
+	while( !pb_flag( "all_players_connected" ) && waited < 60 )
+	{
+		wait 0.1;
+		waited += 0.1;
+	}
 
 	players = get_players();
 	for( i = 0; i < players.size; i++ )
@@ -865,7 +909,9 @@ pb_resolve_weapon( candidates )
 	return undefined;
 }
 
-// Weapons this map has registered (and therefore precached).
+// Weapons this map has loaded, so GiveWeapon will work. include_weapon()
+// precaches on both games; BO1's zombie_weapons[].upgrade_name is NOT
+// precached on maps without Pack-a-Punch, so it isn't trusted here.
 pb_valid_weapons()
 {
 	if( isDefined( level.pb_valid_weapons ) )
@@ -876,18 +922,26 @@ pb_valid_weapons()
 	{
 		keys = getArrayKeys( level.zombie_weapons );
 		for( i = 0; i < keys.size; i++ )
-		{
 			valid[ keys[i] ] = true;
-			if( isDefined( level.zombie_weapons[ keys[i] ].upgrade_name ) )
-				valid[ level.zombie_weapons[ keys[i] ].upgrade_name ] = true;
-		}
 	}
 	if( isDefined( level.zombie_include_weapons ) )
 	{
 		keys = getArrayKeys( level.zombie_include_weapons );
 		for( i = 0; i < keys.size; i++ )
-			valid[ keys[i] ] = true;
+		{
+			// Rifle-grenade alt modes are included but aren't standalone weapons.
+			if( !isSubStr( keys[i], "m7_launcher" ) )
+				valid[ keys[i] ] = true;
+		}
 	}
+	// The starting pistol: WaW's Nacht and Verruckt never include zombie_colt.
+	if( isDefined( level.player_loadout ) )
+	{
+		for( i = 0; i < level.player_loadout.size; i++ )
+			valid[ level.player_loadout[i] ] = true;
+	}
+	if( isDefined( level.laststandpistol ) )
+		valid[ level.laststandpistol ] = true;
 
 	level.pb_valid_weapons = valid;
 	return valid;
@@ -909,11 +963,17 @@ pb_perk_available( perk )
 	return false;
 }
 
-// Jumps the game to `target` by ending round 1 early with the round counter
-// set to target - 1, so the map's own round logic rolls over into `target`.
+// Starts the game at round `target`.
+//
+// Preferred: set the round in the short window before round 1's zombies start
+// spawning (pb_set_start_round, per game), the way the games' own difficulty
+// settings do. If that window has passed, fall back to ending round 1 early
+// with the counter at target - 1 so the map's round logic rolls into target.
 pb_apply_round( target )
 {
 	if( target <= 1 )
+		return;
+	if( pb_set_start_round( target ) )
 		return;
 
 	waited = 0;
@@ -927,41 +987,51 @@ pb_apply_round( target )
 
 	level.round_number = target - 1;
 	level.zombie_health = pb_health_for_round( target - 1 );
-	pb_after_round_skip( target );
+	if( isDefined( level.zombie_vars ) )
+		level.zombie_vars[ "zombie_spawn_delay" ] = pb_spawn_delay_for_round( target - 1 );
+	// The first special-round check happens at round == target after rollover.
+	pb_after_round_skip( target - 1 );
+	if( pb_fallback_prepare( target ) )
+		return;
 
-	// Keep the leftover round-1 horde cleared until the round rolls over.
+	// Keep round 1's horde cleared until the round rolls over.
 	waited = 0;
-	while( level.round_number == target - 1 && waited < 30 )
+	while( level.round_number == target - 1 && waited < 90 )
 	{
-		if( level.zombie_total > 0 )
-			level.zombie_total = 0;
+		pb_fallback_tick();
 		pb_kill_all_zombies();
 		wait 0.5;
 		waited += 0.5;
 	}
+	pb_fallback_done( target );
 }
 
+// Zombie health at the start of `round`, as the stock ai_calculate_health
+// computes it: +increase per round up to 9, then +10% per round.
 pb_health_for_round( round )
 {
 	health = 150;
 	increase = 100;
-	percent = 10;
+	mult = 0.1;
 	if( isDefined( level.zombie_vars ) )
 	{
 		if( isDefined( level.zombie_vars[ "zombie_health_start" ] ) )
 			health = level.zombie_vars[ "zombie_health_start" ];
 		if( isDefined( level.zombie_vars[ "zombie_health_increase" ] ) )
 			increase = level.zombie_vars[ "zombie_health_increase" ];
-		if( isDefined( level.zombie_vars[ "zombie_health_increase_percent" ] ) )
-			percent = level.zombie_vars[ "zombie_health_increase_percent" ];
+		// BO1's key; WaW stores its "percent" already divided by 100.
+		if( isDefined( level.zombie_vars[ "zombie_health_increase_multiplier" ] ) )
+			mult = level.zombie_vars[ "zombie_health_increase_multiplier" ];
+		else if( isDefined( level.zombie_vars[ "zombie_health_increase_percent" ] ) )
+			mult = level.zombie_vars[ "zombie_health_increase_percent" ];
 	}
 
 	for( r = 2; r <= round; r++ )
 	{
 		if( r >= 10 )
-			health = health + int( health * percent / 100 );
+			health = health + int( health * mult );
 		else
-			health = health + increase;
+			health = int( health + increase );
 
 		// Past round ~160 the real game overflows; cap instead.
 		if( health > 1000000000 )
@@ -970,19 +1040,38 @@ pb_health_for_round( round )
 	return health;
 }
 
+// Spawn delay in `round`: the round-1 value shrunk by 5% per round, as
+// round_think does at every rollover. Call it while the delay is still the
+// round-1 value.
+pb_spawn_delay_for_round( round )
+{
+	d = 2;
+	if( isDefined( level.zombie_vars ) && isDefined( level.zombie_vars[ "zombie_spawn_delay" ] ) )
+		d = level.zombie_vars[ "zombie_spawn_delay" ];
+	for( r = 2; r <= round; r++ )
+	{
+		if( d > 0.08 )
+			d = d * 0.95;
+		else
+			d = 0.08;
+	}
+	return d;
+}
+
+// Counts like the stock get_enemy_count, which includes dogs.
 pb_enemy_count()
 {
-	return getAiArray( "axis" ).size;
+	return getAiSpeciesArray( "axis", "all" ).size;
 }
 
 pb_kill_all_zombies()
 {
-	zombies = getAiArray( "axis" );
+	zombies = getAiSpeciesArray( "axis", "all" );
 	for( i = 0; i < zombies.size; i++ )
 	{
 		if( !isAlive( zombies[i] ) )
 			continue;
-		zombies[i].no_powerups = true;
+		zombies[i] pb_mark_no_reward();
 		zombies[i] doDamage( zombies[i].health + 666, zombies[i].origin );
 	}
 }
@@ -990,6 +1079,22 @@ pb_kill_all_zombies()
 // -----------------------------------------------------------------------------
 //  Helpers
 // -----------------------------------------------------------------------------
+
+// Same test as the stock maps\_laststand::player_is_in_laststand on both
+// games, inlined so it needs no cross-script reference.
+pb_in_laststand()
+{
+	return isDefined( self.revivetrigger );
+}
+
+// flag() without its assert, for flags that may not exist yet (Plutonium
+// runs this script before the map's _load sets them up).
+pb_flag( name )
+{
+	if( !isDefined( level.flag ) || !isDefined( level.flag[ name ] ) )
+		return false;
+	return level.flag[ name ];
+}
 
 pb_dist2d( a, b )
 {

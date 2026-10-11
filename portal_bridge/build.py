@@ -61,7 +61,7 @@ def generate_catalog(config: Config, game: str) -> str:
     bools = ["perks_require_machine", "same_game_changelevel", "allow_combo"]
     defaults = {
         "portal_cost": 0, "portal_duration": 90, "portal_distance": 120, "portal_width": 44,
-        "portal_height": 80, "portal_fx_points": 14, "enter_radius": 22, "bridge_timeout": 20,
+        "portal_height": 80, "portal_fx_points": 14, "enter_radius": 22, "bridge_timeout": 10,
         "weapon_refund": 1000, "perks_require_machine": True, "same_game_changelevel": False,
         "allow_combo": True,
     }
@@ -91,19 +91,20 @@ SIGNAL_FILE = "portal_bridge_travel.txt"
 
 # Stock-script functions the adapters call: (script, function, arg count,
 # returns a value). Each becomes a pb_x_<function> wrapper in the platform file.
+# Signatures checked against the stock scripts (plutoniummod/t4-scripts and
+# t5-scripts): WaW add_to_player_score( cost ), BO1 add_to_player_score(
+# points, add_to_total ), BO1 give_perk( perk, bought ).
 STOCK_CALLS = {
     "waw": [
         ("maps/_zombiemode_score", "add_to_player_score", 1, False),
         ("maps/_zombiemode_score", "minus_to_player_score", 1, False),
         ("maps/_zombiemode_perks", "perk_hud_create", 1, False),
         ("maps/_zombiemode_perks", "perk_think", 1, False),
-        ("maps/_laststand", "player_is_in_laststand", 0, True),
     ],
     "bo1": [
-        ("maps/_zombiemode_score", "add_to_player_score", 1, False),
+        ("maps/_zombiemode_score", "add_to_player_score", 2, False),
         ("maps/_zombiemode_score", "minus_to_player_score", 1, False),
         ("maps/_zombiemode_perks", "give_perk", 2, False),
-        ("maps/_laststand", "player_is_in_laststand", 0, True),
     ],
 }
 
@@ -125,6 +126,21 @@ def _stock_wrapper(path: str, func: str, argc: int, returns: bool, route: str) -
     return f"{sig}\n{{\n{body}}}\n"
 
 
+MODTOOLS_SPAWN = (
+    "pb_spawn_model( origin )\n{\n"
+    '\tm = spawn( "script_model", origin );\n'
+    '\tm setModel( "tag_origin" );\n'
+    "\treturn m;\n}\n"
+)
+# An in-game test found Plutonium T5 rejecting a direct spawn() in
+# scripts/sp/zom ("unknown function"), which would stop the map loading; the
+# stock maps\_utility::spawn_model helper does the same thing.
+PLUTONIUM_T5_SPAWN = (
+    "pb_spawn_model( origin )\n{\n"
+    '\treturn spawn_model( "tag_origin", origin );\n}\n'
+)
+
+
 def generate_platform(game: str, route: str) -> str:
     """Everything that differs between the Mod Tools build and the Plutonium
     loose-script build."""
@@ -134,11 +150,11 @@ def generate_platform(game: str, route: str) -> str:
             "// Mod Tools build: compiled into mod.ff next to the stock scripts.\n\n"
             "// Reaches the bridge through the console log, so the game must run with\n"
             "// developer_script 1 and logfile 1/2 (the bridge's launch arguments set both).\n"
-            "pb_emit( line )\n{\n\tprintln( line );\n}\n\n"
-            "pb_spawn_model( origin )\n{\n"
-            '\tm = spawn( "script_model", origin );\n'
-            '\tm setModel( "tag_origin" );\n'
-            "\treturn m;\n}\n\n"
+            "pb_emit( line )\n{\n\tprintln( line );\n\treturn true;\n}\n\n"
+            + MODTOOLS_SPAWN + "\n"
+            "// Keeps frozen players alive while the bridge swaps games.\n"
+            "pb_protect( on )\n{\n\tif( on )\n\t\tself EnableInvulnerability();\n"
+            "\telse\n\t\tself DisableInvulnerability();\n}\n\n"
             "pb_engine_changelevel( mapname )\n{\n\tchangelevel( mapname, false );\n\treturn true;\n}\n"
         )
     else:
@@ -148,14 +164,18 @@ def generate_platform(game: str, route: str) -> str:
             "// stock functions are looked up by name once a map is running.\n\n"
             "// println doesn't reach any log on Plutonium; its file API writes to\n"
             f"// <Plutonium>/{PLUTONIUM_SCRIPTDATA[game]}/, which the bridge watches.\n"
+            "// Fails if that folder is missing or scr_allowFileIo is 0.\n"
             "pb_emit( line )\n{\n"
             f'\tf = fs_fopen( "{SIGNAL_FILE}", "write" );\n'
+            "\tif( !isDefined( f ) || !f )\n\t\treturn false;\n"
             "\tfs_writeline( f, line );\n"
-            "\tfs_fclose( f );\n}\n\n"
-            "pb_spawn_model( origin )\n{\n"
-            '\tm = spawn( "script_model", origin );\n'
-            '\tm setModel( "tag_origin" );\n'
-            "\treturn m;\n}\n\n"
+            "\tfs_fclose( f );\n"
+            "\treturn true;\n}\n\n"
+            + (PLUTONIUM_T5_SPAWN if game == "bo1" else MODTOOLS_SPAWN) + "\n"
+            "// Uses only builtins known to compile in Plutonium loose scripts, so frozen\n"
+            "// players aren't made invulnerable here; the bridge closes the game within\n"
+            "// a second or two of the request.\n"
+            "pb_protect( on )\n{\n}\n\n"
             "// Same-game trips go through the bridge too.\n"
             "pb_engine_changelevel( mapname )\n{\n\treturn false;\n}\n\n"
             "pb_stock( path, name )\n{\n"

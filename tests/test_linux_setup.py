@@ -75,6 +75,8 @@ def test_plutonium_method(home):
     assert waw["signal_files"] == ["{pluto_dir}/storage/t4/raw/scriptdata/portal_bridge_travel.txt"]
     assert waw["cwd"] == "{pluto_dir}"
     assert "PROTON_NO_ESYNC" not in bo1["env"]  # kernel has NTSync
+    assert bo1["game_args"][2:5] == ["+set", "zombiemode", "1"]
+    assert "zombiemode" not in waw["game_args"]
 
 
 def test_bo1_gets_esync_workaround_on_old_kernels(home):
@@ -131,7 +133,8 @@ def test_written_config_launches_correctly(home, tmp_path):
     cmd = launcher.build_command("bo1", "zombie_moon", "PB1|n=1", token="0123456789abcdef")
     bo1_dir = config.games["bo1"].game_dir
     assert cmd[4] == "Z:" + bo1_dir.replace("/", "\\")
-    assert cmd[-8:] == ["-lan", "+name", "Sam", "+set", "pb_state", "PB1|n=1", "+devmap", "zombie_moon"]
+    assert cmd[-11:] == ["-lan", "+name", "Sam", "+set", "zombiemode", "1",
+                         "+set", "pb_state", "PB1|n=1", "+devmap", "zombie_moon"]
     assert launcher.wineprefix("waw").endswith("compatdata/10090/pfx")
     assert launcher.cwd("waw").endswith("AppData/Local/Plutonium")
     assert [s.name for s in launcher.signal_paths("bo1")] == ["portal_bridge_travel.txt"]
