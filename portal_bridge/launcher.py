@@ -158,11 +158,23 @@ class GameLauncher:
 
         env = {**os.environ, **extra_env} if extra_env else None
         kwargs = {"cwd": cwd, "env": env}
+        log_dir = self.config.bridge.get("game_log_dir")
+        if log_dir:
+            # Wine/Proton are chatty; keep their output out of the bridge's terminal.
+            path = Path(expand(log_dir)) / f"{game}.log"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            out = path.open("ab")
+            kwargs.update(stdout=out, stderr=subprocess.STDOUT)
+            self._log(f"  game output -> {path}")
         if not self._windows:
             # Keep the game alive if the bridge's terminal goes away, and out of
             # the bridge's Ctrl+C.
             kwargs["start_new_session"] = True
-        self._procs[game] = self._popen(command, **kwargs)
+        try:
+            self._procs[game] = self._popen(command, **kwargs)
+        finally:
+            if "stdout" in kwargs:
+                kwargs["stdout"].close()  # the child keeps its own copy
 
     # -- stopping ----------------------------------------------------------
 

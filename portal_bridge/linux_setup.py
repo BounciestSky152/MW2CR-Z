@@ -92,7 +92,11 @@ def plan_linux_setup(
         except OSError:
             os_release = ""
 
-    plan = Plan(bridge={"kill_timeout_seconds": 20.0, "kill_wait_seconds": 5.0})
+    plan = Plan(bridge={
+        "kill_timeout_seconds": 20.0,
+        "kill_wait_seconds": 5.0,
+        "game_log_dir": "~/.cache/portal_bridge",
+    })
     steams = st.find_steam_roots(home, env)
     if not steams:
         plan.problems.append(

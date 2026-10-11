@@ -165,3 +165,17 @@ def test_args_file_method_keeps_args_off_the_command_line(tmp_path):
     launcher.launch("waw", "nazi_zombie_factory", "PB1|n=1|x=a~b")
     assert calls == [["steam", "-applaunch", "10090"]]
     assert (tmp_path / "next_args").read_text() == "+set\npb_state\nPB1|n=1|x=a~b\n+devmap\nnazi_zombie_factory\n"
+
+
+def test_game_output_goes_to_a_log_file(tmp_path):
+    config = config_with("waw", game_dir=str(tmp_path), launch=("wine", "x.exe"))
+    config.bridge["game_log_dir"] = str(tmp_path / "logs")
+    seen = {}
+
+    def popen(cmd, **kw):
+        seen.update(kw)
+        kw["stdout"].write(b"wine noise\n")
+
+    GameLauncher(config, popen=popen, platform="linux", log=lambda _: None).launch("waw", "nazi_zombie_factory")
+    assert seen["stderr"] is subprocess.STDOUT
+    assert (tmp_path / "logs/waw.log").read_bytes() == b"wine noise\n"
