@@ -160,7 +160,7 @@ def test_cli_setup_then_install_plutonium_then_doctor(home, tmp_path, monkeypatc
     assert cli.main(["--config-dir", str(cfg_dir), "install-plutonium"]) == 0
     pluto = Path(load_config(cfg_dir).games["waw"].vars[0][1])
     assert (pluto / "storage/t4/raw/scripts/sp/portal_bridge.gsc").is_file()
-    assert (pluto / "storage/t5/scripts/sp/zom/portal_bridge.gsc").is_file()
+    assert (pluto / "storage/t5/raw/scripts/sp/portal_bridge.gsc").is_file()
     assert (pluto / "storage/t4/raw/scriptdata").is_dir()
     bundle = (pluto / "storage/t4/raw/scripts/sp/portal_bridge.gsc").read_text()
     assert "fs_fopen" in bundle and "maps\\_zombiemode_score::" not in bundle

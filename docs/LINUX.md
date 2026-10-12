@@ -113,7 +113,7 @@ python3 -m portal_bridge doctor
   without writing it, or `--name YourName` to set your in-game name.
 - **`install-plutonium`** builds the script and copies it to the two places Plutonium loads zombies scripts from:
   - WaW: `Plutonium/storage/t4/raw/scripts/sp/portal_bridge.gsc`
-  - BO1: `Plutonium/storage/t5/scripts/sp/zom/portal_bridge.gsc`. The `zom` folder means it only runs in zombies,
+  - BO1: `Plutonium/storage/t5/raw/scripts/sp/portal_bridge.gsc`. The `zom` folder means it only runs in zombies,
     not on the menu or in the campaign.
 
   It also creates the `scriptdata` folders the script writes travel requests to.

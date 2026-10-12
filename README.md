@@ -88,7 +88,7 @@ Plutonium is installed somewhere else.
 | Game | Script | Travel requests appear in |
 |---|---|---|
 | WaW | `storage\t4\raw\scripts\sp\portal_bridge.gsc` | `storage\t4\raw\scriptdata\portal_bridge_travel.txt` |
-| BO1 | `storage\t5\scripts\sp\zom\portal_bridge.gsc` (`zom` = zombies only) | `storage\t5\raw\scriptdata\portal_bridge_travel.txt` |
+| BO1 | `storage\t5\raw\scripts\sp\portal_bridge.gsc` | `storage\t5\raw\scriptdata\portal_bridge_travel.txt` |
 
 Then point the bridge at Plutonium in `config/bridge.local.json` (see step 3).
 

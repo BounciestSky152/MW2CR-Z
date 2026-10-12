@@ -140,7 +140,7 @@ def test_build_writes_both_layouts(tmp_path):
         assert f"{game}/mods/portal_bridge/maps/_portal_bridge.gsc" in written
         assert f"{game}/mods/portal_bridge/maps/_portal_bridge_platform.gsc" in written
     assert "waw/plutonium/storage/t4/raw/scripts/sp/portal_bridge.gsc" in written
-    assert "bo1/plutonium/storage/t5/scripts/sp/zom/portal_bridge.gsc" in written
+    assert "bo1/plutonium/storage/t5/raw/scripts/sp/portal_bridge.gsc" in written
     assert "waw/plutonium/storage/t4/raw/scriptdata/portal_bridge_readme.txt" in written
     csv = (tmp_path / "waw/mods/portal_bridge/mod.csv").read_text()
     assert "rawfile,maps/_zombiemode.gsc" in csv and "rawfile,maps/_portal_bridge_platform.gsc" in csv

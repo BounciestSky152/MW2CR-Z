@@ -83,9 +83,10 @@ def generate_catalog(config: Config, game: str) -> str:
 
 ROUTES = ("modtools", "plutonium")
 
-# Where Plutonium loads loose zombies scripts from. T5's scripts/sp/zom only
-# runs in zombies; scripts/sp would also run on the main menu and campaign.
-PLUTONIUM_SCRIPT_DIRS = {"waw": "storage/t4/raw/scripts/sp", "bo1": "storage/t5/scripts/sp/zom"}
+# Where Plutonium loads loose scripts from. raw/scripts/sp loads on every SP map
+# (main() skips non-zombie maps); T5's scripts/sp/zom would only load when the
+# zombies game mode was picked from the menu, which a direct +devmap launch skips.
+PLUTONIUM_SCRIPT_DIRS = {"waw": "storage/t4/raw/scripts/sp", "bo1": "storage/t5/raw/scripts/sp"}
 PLUTONIUM_SCRIPTDATA = {"waw": "storage/t4/raw/scriptdata", "bo1": "storage/t5/raw/scriptdata"}
 SIGNAL_FILE = "portal_bridge_travel.txt"
 

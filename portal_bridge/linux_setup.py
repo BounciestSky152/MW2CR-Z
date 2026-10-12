@@ -26,8 +26,8 @@ METHODS = ("plutonium", "proton", "steam")
 PLUTONIUM_GAME_IDS = {"waw": "t4sp", "bo1": "t5sp"}
 PLUTONIUM_STORAGE = {"waw": "t4", "bo1": "t5"}
 # Where Plutonium loads loose zombies scripts from (T4: raw/scripts/sp,
-# T5: scripts/sp/zom so they don't also run on the main menu / campaign).
-PLUTONIUM_SCRIPT_DIRS = {"waw": "storage/t4/raw/scripts/sp", "bo1": "storage/t5/scripts/sp/zom"}
+# T5: raw/scripts/sp too, since scripts/sp/zom needs the menu's zombies mode).
+PLUTONIUM_SCRIPT_DIRS = {"waw": "storage/t4/raw/scripts/sp", "bo1": "storage/t5/raw/scripts/sp"}
 SIGNAL_FILE = "portal_bridge_travel.txt"
 WRAPPER = REPO_ROOT / "scripts" / "pb-wrap.sh"
 

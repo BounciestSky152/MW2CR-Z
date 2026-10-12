@@ -196,7 +196,8 @@ def _cmd_install_plutonium(config, args) -> int:
             storage = PLUTONIUM_SCRIPT_DIRS[game].split("/")[1]
             for stale in (pluto / "storage" / storage).glob("**/scripts/**/portal_bridge.gsc"):
                 if stale != dest:
-                    print(f"{game}: warning: remove the old copy {stale}", file=sys.stderr)
+                    stale.unlink()
+                    print(f"{game}: removed old copy {stale}")
     return 0 if installed == len(games) else 1
 
 
