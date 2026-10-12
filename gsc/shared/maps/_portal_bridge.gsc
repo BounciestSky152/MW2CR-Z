@@ -529,12 +529,12 @@ pb_depart( dest, owner )
 		players[i] freezeControls( true );
 		players[i].ignoreme = true;
 		players[i] pb_protect( true );
-		players[i] thread pb_flash( 0, 1, 0.75 );
+		players[i] thread pb_flash( 0, 1, 0.35 );
 		players[i] iPrintLnBold( "Stepping through to " + dest.label + "..." );
 	}
 
 	state = pb_encode_state( dest );
-	wait 0.8;
+	wait 0.4;
 
 	if( dest.game_id == pb_game_id() && level.pb_settings.same_game_changelevel )
 	{

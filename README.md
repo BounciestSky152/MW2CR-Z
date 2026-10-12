@@ -26,9 +26,8 @@ bridge gets as close as it can:
 - **Between the two games:** the screen fades to portal-blue, the bridge closes one game and launches the other
   straight into the destination map, and your loadout is restored on arrival. You don't touch a menu, but you do
   sit through the game's normal startup and loading screen.
-- **Between maps of the same game:** this goes through the bridge the same way by default. If you set
-  `"same_game_changelevel": true`, the game swaps maps itself without restarting (see
-  [Configuration](#configuration)).
+- **Between maps of the same game:** the game changes the map itself, with no restart and no profile check. It
+  takes as long as a normal level load. The bridge isn't involved.
 
 **This hasn't been run in-game yet.** Every stock function, field and weapon name the scripts use was checked
 against dumps of the real WaW and BO1 zombies scripts, with file and line numbers. Those dumps are
@@ -195,7 +194,7 @@ The `gameplay` section of `config/bridge.json` is baked into the scripts by `bui
 | `portal_duration` | 90 | Seconds before an unused portal fizzles (0 = never) |
 | `weapon_refund` | 1000 | Points per gun that has no equivalent at the destination |
 | `perks_require_machine` | true | Only return perks whose machine exists on the destination map |
-| `same_game_changelevel` | false | Same-game trips use the engine's `changelevel` instead of a restart |
+| `same_game_changelevel` | true | Same-game trips change the map in place (no restart, no profile prompt). Set false to always go through the bridge |
 | `allow_combo` | true | Allow the USE + MELEE gesture (the `pb_open` dvar always works) |
 | `custom_fx` | "" | Path of your own portal effect (e.g. `fx/portal_bridge/portal_blue`) if you make one in the effects editor. Without it the ring uses the stock power-up glow. |
 | `portal_width` / `portal_height` / `portal_fx_points` / `portal_distance` / `enter_radius` / `bridge_timeout` | | Portal size, ring density, spawn distance, walk-through radius, and how long to wait for the bridge |

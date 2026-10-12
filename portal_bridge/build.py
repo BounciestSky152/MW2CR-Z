@@ -62,7 +62,7 @@ def generate_catalog(config: Config, game: str) -> str:
     defaults = {
         "portal_cost": 0, "portal_duration": 90, "portal_distance": 120, "portal_width": 44,
         "portal_height": 80, "portal_fx_points": 14, "enter_radius": 22, "bridge_timeout": 10,
-        "weapon_refund": 1000, "perks_require_machine": True, "same_game_changelevel": False,
+        "weapon_refund": 1000, "perks_require_machine": True, "same_game_changelevel": True,
         "allow_combo": True,
     }
     out.append("pb_catalog_settings()\n{\n\ts = spawnStruct();\n")
@@ -176,8 +176,9 @@ def generate_platform(game: str, route: str) -> str:
             "// players aren't made invulnerable here; the bridge closes the game within\n"
             "// a second or two of the request.\n"
             "pb_protect( on )\n{\n}\n\n"
-            "// Same-game trips go through the bridge too.\n"
-            "pb_engine_changelevel( mapname )\n{\n\treturn false;\n}\n\n"
+            "// Same-game trips change the map in place: no restart, no profile check.\n"
+            "// ChangeLevel is a stock builtin in both games (used by _endmission).\n"
+            "pb_engine_changelevel( mapname )\n{\n\tchangelevel( mapname, false );\n\treturn true;\n}\n\n"
             "pb_stock( path, name )\n{\n"
             "\tif( !isDefined( level.pb_stock ) )\n\t\tlevel.pb_stock = [];\n"
             '\tkey = path + "::" + name;\n'
