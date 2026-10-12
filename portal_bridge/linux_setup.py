@@ -120,7 +120,7 @@ def plan_linux_setup(
         no_ntsync = not st.kernel_has_ntsync(kernel_release)
 
         if method == "plutonium":
-            cfg = _plan_plutonium(plan, game, label, steam, inst, proton, pluto_candidates, player_name)
+            cfg = _plan_plutonium(plan, game, label, steam, inst, proton, pluto_candidates, player_name, protons)
         elif method == "proton":
             cfg = _plan_proton(plan, game, label, steam, inst, proton)
         elif method == "steam":
@@ -157,7 +157,7 @@ def plan_linux_setup(
     return plan
 
 
-def _plan_plutonium(plan, game, label, steam, inst, proton, candidates, player_name) -> dict | None:
+def _plan_plutonium(plan, game, label, steam, inst, proton, candidates, player_name, protons=()) -> dict | None:
     own = [c for c in candidates if inst.prefix in c.parents]
     pluto = (own or candidates or [None])[0]
     if pluto is None:
@@ -177,6 +177,8 @@ def _plan_plutonium(plan, game, label, steam, inst, proton, candidates, player_n
         # Plutonium outside any prefix (e.g. ~/.local/share/Plutonium): borrow the game's.
         prefix, compat = inst.prefix, inst.compatdata
     if compat is not None:
+        # Use the Proton that built Plutonium's prefix; another one "upgrades" it.
+        proton = st.proton_from_prefix(compat, list(protons)) or proton
         if proton is None:
             plan.problems.append(f"{label}: no Proton found. Install one in Steam (Proton 9 or GE-Proton) and re-run.")
             return None
