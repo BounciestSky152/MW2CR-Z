@@ -203,8 +203,11 @@ def _plan_plutonium(plan, game, label, steam, inst, proton, candidates, player_n
             "{game_args}",
         ],
         # BO1 runs campaign-only setup in zombies unless zombiemode is 1.
+        # WaW: pick Plutonium's default profile ($$$) up front, so a cold launch
+        # straight into a map doesn't stop at "create a profile".
         "game_args": ["+name", player_name]
-        + (["+set", "zombiemode", "1"] if game == "bo1" else [])
+        + (["+set", "zombiemode", "1"] if game == "bo1" else
+           ["+set", "com_playerProfile", "$$$", "+set", "ui_playerProfileAlreadyChosen", "1"])
         + ["{state_args}", "+devmap", "{map}"],
         "env": env,
         # The bootstrapper relaunches itself as the game process; t4sp.exe/t5sp.exe

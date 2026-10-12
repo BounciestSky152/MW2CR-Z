@@ -77,6 +77,7 @@ def test_plutonium_method(home):
     assert "PROTON_NO_ESYNC" not in bo1["env"]  # kernel has NTSync
     assert bo1["game_args"][2:5] == ["+set", "zombiemode", "1"]
     assert "zombiemode" not in waw["game_args"]
+    assert waw["game_args"][2:5] == ["+set", "com_playerProfile", "$$$"]
 
 
 def test_bo1_gets_esync_workaround_on_old_kernels(home):
