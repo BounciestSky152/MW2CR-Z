@@ -149,7 +149,9 @@ class GameLauncher:
             return
 
         if cwd and not Path(cwd).is_dir():
-            raise FileNotFoundError(f"games.{game} working directory {cwd!r} doesn't exist - check config/bridge.local.json")
+            hint = "check config/bridge.local.json" if self._windows else \
+                "run: python3 -m portal_bridge linux-setup  (needed again after every fresh download)"
+            raise FileNotFoundError(f"games.{game} working directory {cwd!r} doesn't exist - {hint}")
         if args_file is not None:
             # Read (and deleted) by scripts/pb-wrap.sh, set as the game's Steam
             # launch options; nothing goes through Steam's shell-built command line.
