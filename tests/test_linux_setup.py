@@ -77,7 +77,6 @@ def test_plutonium_method(home):
     assert "PROTON_NO_ESYNC" not in bo1["env"]  # kernel has NTSync
     assert bo1["game_args"][2:5] == ["+set", "zombiemode", "1"]
     assert "zombiemode" not in waw["game_args"]
-    assert waw["game_args"][2:5] == ["+set", "com_playerProfile", "$$$"]
 
 
 def test_bo1_gets_esync_workaround_on_old_kernels(home):
@@ -176,3 +175,12 @@ def test_wrapper_is_installed_for_steam_method(home, tmp_path):
     write_plan(p, cfg_dir)
     wrapper = home / ".local/share/portal_bridge/pb-wrap.sh"
     assert wrapper.is_file() and wrapper.stat().st_mode & 0o111
+
+
+def test_plutonium_token_is_stable_per_player(home, tmp_path):
+    cfg_dir = config_dir_copy(tmp_path)
+    write_plan(plan(home, {"waw": "plutonium"}, player_name="Sam"), cfg_dir)
+    launcher = GameLauncher(load_config(cfg_dir), log=lambda _: None)
+    a = launcher.build_command("waw", "nazi_zombie_prototype", token="random1")
+    b = launcher.build_command("waw", "nazi_zombie_prototype", token="random2")
+    assert a == b and a[a.index("-token") + 1] not in ("random1", "random2")

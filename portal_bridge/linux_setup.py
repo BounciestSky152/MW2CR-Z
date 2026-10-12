@@ -12,6 +12,7 @@ Methods per game:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import platform as _platform
@@ -191,7 +192,9 @@ def _plan_plutonium(plan, game, label, steam, inst, proton, candidates, player_n
     plan.notes.append(f"{label}: Plutonium at {pluto} (prefix {prefix})")
     return {
         "game_dir": str(inst.game_dir),
-        "vars": {"pluto_dir": str(pluto)},
+        # A fixed LAN token per player name: a fresh one each launch looks like
+        # a new player, so WaW never finds the profile it made last time.
+        "vars": {"pluto_dir": str(pluto), "token": hashlib.sha256(player_name.encode()).hexdigest()[:16]},
         # The bootstrapper refuses to start from anywhere else.
         "cwd": "{pluto_dir}",
         "launch": runner + [
@@ -206,8 +209,7 @@ def _plan_plutonium(plan, game, label, steam, inst, proton, candidates, player_n
         # WaW: pick Plutonium's default profile ($$$) up front, so a cold launch
         # straight into a map doesn't stop at "create a profile".
         "game_args": ["+name", player_name]
-        + (["+set", "zombiemode", "1"] if game == "bo1" else
-           ["+set", "com_playerProfile", "$$$", "+set", "ui_playerProfileAlreadyChosen", "1"])
+        + (["+set", "zombiemode", "1"] if game == "bo1" else [])
         + ["{state_args}", "+devmap", "{map}"],
         "env": env,
         # The bootstrapper relaunches itself as the game process; t4sp.exe/t5sp.exe
