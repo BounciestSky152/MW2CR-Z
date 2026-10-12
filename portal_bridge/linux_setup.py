@@ -194,7 +194,8 @@ def _plan_plutonium(plan, game, label, steam, inst, proton, candidates, player_n
         "game_dir": str(inst.game_dir),
         # A fixed LAN token per player name: a fresh one each launch looks like
         # a new player, so WaW never finds the profile it made last time.
-        "vars": {"pluto_dir": str(pluto), "token": hashlib.sha256(player_name.encode()).hexdigest()[:16]},
+        "vars": {"pluto_dir": str(pluto), "token": hashlib.sha256(player_name.encode()).hexdigest()[:16],
+                 **({"devmap_wait": "600"} if game == "waw" else {})},
         # The bootstrapper refuses to start from anywhere else.
         "cwd": "{pluto_dir}",
         "launch": runner + [
@@ -210,7 +211,12 @@ def _plan_plutonium(plan, game, label, steam, inst, proton, candidates, player_n
         # straight into a map doesn't stop at "create a profile".
         "game_args": ["+name", player_name]
         + (["+set", "zombiemode", "1"] if game == "bo1" else [])
-        + ["{state_args}", "+devmap", "{map}"],
+        + ["{state_args}"]
+        # WaW: a +devmap that runs before the menu has signed the player in
+        # makes the client connect twice ("Duplicate qport on server"), which
+        # drops it to the menu's profile prompt. Hold the map back some frames.
+        + (["+wait", "{devmap_wait}"] if game == "waw" else [])
+        + ["+devmap", "{map}"],
         "env": env,
         # The bootstrapper relaunches itself as the game process; t4sp.exe/t5sp.exe
         # are listed in case a build names it after the game binary instead.
