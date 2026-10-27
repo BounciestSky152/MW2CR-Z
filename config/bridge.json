@@ -6,25 +6,6 @@
   ],
 
   "games": {
-    "waw": {
-      "label": "World at War",
-      "game_dir": "C:/Program Files (x86)/Steam/steamapps/common/Call of Duty World at War",
-      "launch": ["{game_dir}/CoDWaW.exe", "{game_args}"],
-      "game_args": [
-        "+set", "fs_game", "mods/portal_bridge",
-        "+set", "developer", "1",
-        "+set", "developer_script", "1",
-        "+set", "logfile", "2",
-        "{state_args}",
-        "+devmap", "{map}"
-      ],
-      "process_names": ["CoDWaW.exe"],
-      "logs": [
-        "{game_dir}/mods/portal_bridge/console.log",
-        "{game_dir}/main/console.log",
-        "%LOCALAPPDATA%/Activision/CoDWaW/mods/portal_bridge/console.log"
-      ]
-    },
     "bo1": {
       "label": "Black Ops",
       "game_dir": "C:/Program Files (x86)/Steam/steamapps/common/Call of Duty Black Ops",
@@ -61,7 +42,7 @@
     "portal_distance": 120,
     "portal_width": 44,
     "portal_height": 80,
-    "portal_fx_points": 14,
+    "portal_fx_points": 24,
     "enter_radius": 22,
     "bridge_timeout": 10,
     "weapon_refund": 1000,

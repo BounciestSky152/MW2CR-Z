@@ -7,6 +7,7 @@ dist/<game>/plutonium/storage/... single-file bundle for Plutonium's loose
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
@@ -31,12 +32,32 @@ def _gsc_bool(value) -> str:
     return "true" if value else "false"
 
 
+def installed_map_ids(config: Config, game: str) -> set[str] | None:
+    """Map ids whose fastfile (zone/<lang>/<map>.ff) is in the game folder, or
+    None when the folder can't be read (then every map is kept)."""
+    zone = Path(os.path.expandvars(os.path.expanduser(config.games[game].game_dir))) / "zone"
+    if not zone.is_dir():
+        return None
+    return {p.stem.lower() for p in zone.glob("**/*.ff")}
+
+
+def missing_maps(config: Config, game: str) -> list[str]:
+    """Enabled maps left out of the in-game list because you don't own them."""
+    have = installed_map_ids(config, game)
+    if have is None:
+        return []
+    return [m.name for m in config.enabled_maps() if m.game == game and m.id.lower() not in have]
+
+
 def generate_catalog(config: Config, game: str) -> str:
     gp = config.gameplay
     out = [GENERATED_HEADER, "\n"]
+    have = installed_map_ids(config, game)
 
     out.append("pb_catalog_maps()\n{\n\tlist = [];\n")
     for m in config.enabled_maps():
+        if have is not None and m.id.lower() not in have:
+            continue  # not owned: a portal to it would fail to load
         label = f"{m.name} ({config.games[m.game].label})"
         out.append(
             f"\tlist[ list.size ] = pb_catalog_map( {gsc_string(m.game)}, "
@@ -61,7 +82,7 @@ def generate_catalog(config: Config, game: str) -> str:
     bools = ["perks_require_machine", "same_game_changelevel", "allow_combo"]
     defaults = {
         "portal_cost": 0, "portal_duration": 90, "portal_distance": 120, "portal_width": 44,
-        "portal_height": 80, "portal_fx_points": 14, "enter_radius": 22, "bridge_timeout": 10,
+        "portal_height": 80, "portal_fx_points": 24, "enter_radius": 22, "bridge_timeout": 10,
         "weapon_refund": 1000, "perks_require_machine": True, "same_game_changelevel": True,
         "allow_combo": True,
     }
@@ -86,22 +107,15 @@ ROUTES = ("modtools", "plutonium")
 # Where Plutonium loads loose scripts from. raw/scripts/sp loads on every SP map
 # (main() skips non-zombie maps); T5's scripts/sp/zom would only load when the
 # zombies game mode was picked from the menu, which a direct +devmap launch skips.
-PLUTONIUM_SCRIPT_DIRS = {"waw": "storage/t4/raw/scripts/sp", "bo1": "storage/t5/raw/scripts/sp"}
-PLUTONIUM_SCRIPTDATA = {"waw": "storage/t4/raw/scriptdata", "bo1": "storage/t5/raw/scriptdata"}
+PLUTONIUM_SCRIPT_DIRS = {"bo1": "storage/t5/raw/scripts/sp"}
+PLUTONIUM_SCRIPTDATA = {"bo1": "storage/t5/raw/scriptdata"}
 SIGNAL_FILE = "portal_bridge_travel.txt"
 
 # Stock-script functions the adapters call: (script, function, arg count,
 # returns a value). Each becomes a pb_x_<function> wrapper in the platform file.
-# Signatures checked against the stock scripts (plutoniummod/t4-scripts and
-# t5-scripts): WaW add_to_player_score( cost ), BO1 add_to_player_score(
-# points, add_to_total ), BO1 give_perk( perk, bought ).
+# Signatures checked against the stock scripts (plutoniummod/t5-scripts):
+# add_to_player_score( points, add_to_total ), give_perk( perk, bought ).
 STOCK_CALLS = {
-    "waw": [
-        ("maps/_zombiemode_score", "add_to_player_score", 1, False),
-        ("maps/_zombiemode_score", "minus_to_player_score", 1, False),
-        ("maps/_zombiemode_perks", "perk_hud_create", 1, False),
-        ("maps/_zombiemode_perks", "perk_think", 1, False),
-    ],
     "bo1": [
         ("maps/_zombiemode_score", "add_to_player_score", 2, False),
         ("maps/_zombiemode_score", "minus_to_player_score", 1, False),

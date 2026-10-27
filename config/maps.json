@@ -1,10 +1,6 @@
 {
   "_comment": "Every map a portal can lead to. Set \"enabled\": false for DLC you don't own. Custom maps work too if they load maps\\_zombiemode (and therefore the Portal Bridge hook).",
   "maps": [
-    {"game": "waw", "id": "nazi_zombie_prototype", "name": "Nacht der Untoten"},
-    {"game": "waw", "id": "nazi_zombie_asylum", "name": "Verruckt"},
-    {"game": "waw", "id": "nazi_zombie_sumpf", "name": "Shi No Numa"},
-    {"game": "waw", "id": "nazi_zombie_factory", "name": "Der Riese"},
 
     {"game": "bo1", "id": "zombie_theater", "name": "Kino der Toten"},
     {"game": "bo1", "id": "zombie_pentagon", "name": "Five"},

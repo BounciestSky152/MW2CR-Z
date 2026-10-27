@@ -43,7 +43,7 @@ def home(tmp_path):
     write(root / "steamapps/appmanifest_1628350.acf",
           '"AppState" { "appid" "1628350" "installdir" "SteamLinuxRuntime_sniper" }')
     write(root / "steamapps/common/SteamLinuxRuntime_sniper/_v2-entry-point", "#!/bin/sh\n")
-    # WaW's prefix was last set up by Proton 9 (Steam writes this).
+    # The prefix holding Plutonium was last set up by Proton 9 (Steam writes this).
     write(lib / "steamapps/compatdata/10090/config_info",
           f"9.0-203\n{root}/steamapps/common/Proton 9.0 (Beta)/files/share/fonts/\n")
     # Plutonium installed inside WaW's prefix only (DeckOps layout).
@@ -60,25 +60,20 @@ def plan(home, methods, **kw):
 
 
 def test_plutonium_method(home):
-    p = plan(home, {"waw": "plutonium", "bo1": "plutonium"})
+    p = plan(home, {"bo1": "plutonium"})
     assert not p.problems, p.problems
-    waw, bo1 = p.games["waw"], p.games["bo1"]
-    pluto = waw["vars"]["pluto_dir"]
-    assert pluto.endswith("compatdata/10090/pfx/drive_c/users/steamuser/AppData/Local/Plutonium")
-    assert bo1["vars"]["pluto_dir"] == pluto  # one Plutonium install serves both games
-    assert waw["launch"][0].endswith("Proton 9.0 (Beta)/proton") and waw["launch"][1] == "run"
-    assert waw["launch"][2:] == ["{pluto_dir}/bin/plutonium-bootstrapper-win32.exe", "t4sp", "{game_dir_win}",
+    bo1 = p.games["bo1"]
+    # Found in another game's prefix (DeckOps layout): every compatdata is searched.
+    assert bo1["vars"]["pluto_dir"].endswith("compatdata/10090/pfx/drive_c/users/steamuser/AppData/Local/Plutonium")
+    assert bo1["launch"][0].endswith("Proton 9.0 (Beta)/proton") and bo1["launch"][1] == "run"
+    assert bo1["launch"][2:] == ["{pluto_dir}/bin/plutonium-bootstrapper-win32.exe", "t5sp", "{game_dir_win}",
                                  "-token", "{token}", "-lan", "{game_args}"]
-    assert bo1["launch"][3] == "t5sp"
-    assert waw["env"]["STEAM_COMPAT_DATA_PATH"].endswith("compatdata/10090")
-    assert "SteamGameId" not in waw["env"]  # Plutonium doesn't use Steam
-    assert waw["signal_files"] == ["{pluto_dir}/storage/t4/raw/scriptdata/portal_bridge_travel.txt"]
-    assert waw["cwd"] == "{pluto_dir}"
+    assert bo1["env"]["STEAM_COMPAT_DATA_PATH"].endswith("compatdata/10090")
+    assert "SteamGameId" not in bo1["env"]  # Plutonium doesn't use Steam
+    assert bo1["signal_files"] == ["{pluto_dir}/storage/t5/raw/scriptdata/portal_bridge_travel.txt"]
+    assert bo1["cwd"] == "{pluto_dir}"
     assert "PROTON_NO_ESYNC" not in bo1["env"]  # kernel has NTSync
-    assert bo1["game_args"][2:5] == ["+set", "zombiemode", "1"]
-    assert "zombiemode" not in waw["game_args"]
-    assert waw["game_args"][-4:] == ["+wait", "{devmap_wait}", "+devmap", "{map}"]
-    assert waw["vars"]["devmap_wait"] == "600" and "+wait" not in bo1["game_args"]
+    assert bo1["game_args"] == ["+name", "Player", "+set", "zombiemode", "1", "{state_args}", "+devmap", "{map}"]
 
 
 def test_bo1_gets_esync_workaround_on_old_kernels(home):
@@ -88,35 +83,24 @@ def test_bo1_gets_esync_workaround_on_old_kernels(home):
 
 
 def test_proton_method_uses_the_runtime_container_and_steam_drm_env(home):
-    p = plan(home, {"waw": "proton", "bo1": "proton"})
-    waw, bo1 = p.games["waw"], p.games["bo1"]
-    assert waw["launch"][0].endswith("SteamLinuxRuntime_sniper/_v2-entry-point")
-    assert waw["launch"][1:4] == ["--verb=waitforexitandrun", "--", waw["launch"][3]]
-    assert waw["launch"][4] == "waitforexitandrun"
-    assert waw["launch"][5:] == ["{game_dir}/CoDWaW.exe", "{game_args}"]
-    assert waw["env"]["SteamGameId"] == waw["env"]["SteamAppId"] == "10090"
+    bo1 = plan(home, {"bo1": "proton"}).games["bo1"]
+    assert bo1["launch"][0].endswith("SteamLinuxRuntime_sniper/_v2-entry-point")
+    assert bo1["launch"][1:4] == ["--verb=waitforexitandrun", "--", bo1["launch"][3]]
+    assert bo1["launch"][4] == "waitforexitandrun"
+    assert bo1["env"]["SteamGameId"] == bo1["env"]["SteamAppId"] == "42700"
     assert bo1["cwd"] == "{game_dir}/bin"
     assert bo1["launch"][-4:] == ["{game_dir}/bin/launcher_ldr.exe", "game_mod.dll", "../BlackOps.exe", "{game_args}"]
 
 
-def test_steam_method_for_waw_and_refused_for_bo1(home):
-    p = plan(home, {"waw": "steam", "bo1": "steam"})
-    assert p.games["waw"]["launch"] == ["steam", "-applaunch", "10090"]
-    assert p.games["waw"]["args_file"].endswith(".local/share/portal_bridge/next_args_waw")
-    assert p.games["waw"]["steam_app_id"] == "10090"
-    assert "bo1" not in p.games
-    assert any("Black Ops" in x for x in p.problems)
-
-
 def test_missing_plutonium_explains_how_to_get_it(home):
     shutil.rmtree(next(home.parent.glob("games/SteamLibrary/steamapps/compatdata/10090/pfx/drive_c/users/steamuser/AppData/Local/Plutonium")))
-    p = plan(home, {"waw": "plutonium"})
-    assert "waw" not in p.games
+    p = plan(home, {"bo1": "plutonium"})
+    assert "bo1" not in p.games
     assert "plutonium-updater" in p.problems[0]
 
 
 def test_steam_deck_note(home):
-    p = plan(home, {"waw": "plutonium"}, os_release="ID=steamos\nVARIANT_ID=steamdeck\n")
+    p = plan(home, {"bo1": "plutonium"}, os_release="ID=steamos\nVARIANT_ID=steamdeck\n")
     assert any("Steam Deck" in n for n in p.notes)
 
 
@@ -128,7 +112,7 @@ def config_dir_copy(tmp_path) -> Path:
 
 def test_written_config_launches_correctly(home, tmp_path):
     cfg_dir = config_dir_copy(tmp_path)
-    p = plan(home, {"waw": "plutonium", "bo1": "plutonium"}, player_name="Sam")
+    p = plan(home, {"bo1": "plutonium"}, player_name="Sam")
     write_plan(p, cfg_dir)
     config = load_config(cfg_dir)
     launcher = GameLauncher(config, token=lambda: "0123456789abcdef", log=lambda _: None)
@@ -137,19 +121,18 @@ def test_written_config_launches_correctly(home, tmp_path):
     assert cmd[4] == "Z:" + bo1_dir.replace("/", "\\")
     assert cmd[-11:] == ["-lan", "+name", "Sam", "+set", "zombiemode", "1",
                          "+set", "pb_state", "PB1|n=1", "+devmap", "zombie_moon"]
-    assert launcher.build_command("waw", "nazi_zombie_factory")[-4:] == ["+wait", "600", "+devmap", "nazi_zombie_factory"]
-    assert launcher.wineprefix("waw").endswith("compatdata/10090/pfx")
-    assert launcher.cwd("waw").endswith("AppData/Local/Plutonium")
+    assert launcher.wineprefix("bo1").endswith("compatdata/10090/pfx")
+    assert launcher.cwd("bo1").endswith("AppData/Local/Plutonium")
     assert [s.name for s in launcher.signal_paths("bo1")] == ["portal_bridge_travel.txt"]
 
 
 def test_switching_method_replaces_the_whole_game_section(home, tmp_path):
     cfg_dir = config_dir_copy(tmp_path)
-    write_plan(plan(home, {"waw": "plutonium"}), cfg_dir)
-    write_plan(plan(home, {"waw": "proton"}), cfg_dir)
+    write_plan(plan(home, {"bo1": "plutonium"}), cfg_dir)
+    write_plan(plan(home, {"bo1": "proton"}), cfg_dir)
     local = json.loads((cfg_dir / "bridge.local.json").read_text())
-    assert "pluto_dir" not in local["games"]["waw"]["vars"]
-    assert local["games"]["waw"]["signal_files"] == []
+    assert "pluto_dir" not in local["games"]["bo1"]["vars"]
+    assert local["games"]["bo1"]["signal_files"] == []
     assert (cfg_dir / "bridge.local.json.bak").exists()
 
 
@@ -160,11 +143,10 @@ def test_cli_setup_then_install_plutonium_then_doctor(home, tmp_path, monkeypatc
     cfg_dir = config_dir_copy(tmp_path)
     assert cli.main(["--config-dir", str(cfg_dir), "linux-setup"]) == 0
     assert cli.main(["--config-dir", str(cfg_dir), "install-plutonium"]) == 0
-    pluto = Path(load_config(cfg_dir).games["waw"].vars[0][1])
-    assert (pluto / "storage/t4/raw/scripts/sp/portal_bridge.gsc").is_file()
+    pluto = Path(load_config(cfg_dir).games["bo1"].vars[0][1])
     assert (pluto / "storage/t5/raw/scripts/sp/portal_bridge.gsc").is_file()
-    assert (pluto / "storage/t4/raw/scriptdata").is_dir()
-    bundle = (pluto / "storage/t4/raw/scripts/sp/portal_bridge.gsc").read_text()
+    assert (pluto / "storage/t5/raw/scriptdata").is_dir()
+    bundle = (pluto / "storage/t5/raw/scripts/sp/portal_bridge.gsc").read_text()
     assert "fs_fopen" in bundle and "maps\\_zombiemode_score::" not in bundle
     capsys.readouterr()
     cli.main(["--config-dir", str(cfg_dir), "doctor"])
@@ -172,18 +154,10 @@ def test_cli_setup_then_install_plutonium_then_doctor(home, tmp_path, monkeypatc
     assert "[!!] Plutonium script" not in out
 
 
-def test_wrapper_is_installed_for_steam_method(home, tmp_path):
-    cfg_dir = config_dir_copy(tmp_path)
-    p = plan(home, {"waw": "steam"})
-    write_plan(p, cfg_dir)
-    wrapper = home / ".local/share/portal_bridge/pb-wrap.sh"
-    assert wrapper.is_file() and wrapper.stat().st_mode & 0o111
-
-
 def test_plutonium_token_is_stable_per_player(home, tmp_path):
     cfg_dir = config_dir_copy(tmp_path)
-    write_plan(plan(home, {"waw": "plutonium"}, player_name="Sam"), cfg_dir)
+    write_plan(plan(home, {"bo1": "plutonium"}, player_name="Sam"), cfg_dir)
     launcher = GameLauncher(load_config(cfg_dir), log=lambda _: None)
-    a = launcher.build_command("waw", "nazi_zombie_prototype", token="random1")
-    b = launcher.build_command("waw", "nazi_zombie_prototype", token="random2")
+    a = launcher.build_command("bo1", "zombie_moon", token="random1")
+    b = launcher.build_command("bo1", "zombie_moon", token="random2")
     assert a == b and a[a.index("-token") + 1] not in ("random1", "random2")

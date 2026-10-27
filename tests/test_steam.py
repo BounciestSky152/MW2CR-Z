@@ -100,9 +100,9 @@ def test_finds_steam_once_through_symlinks(tmp_path):
 def test_finds_games_in_secondary_library(tmp_path):
     _, lib = make_steam(tmp_path)
     s = steam.find_steam_roots(tmp_path, {})[0]
-    waw = steam.find_game(s, "waw")
-    assert waw.game_dir == lib.resolve() / "steamapps/common/Call of Duty World at War"
-    assert waw.compatdata == lib.resolve() / "steamapps/compatdata/10090"
+    bo1 = steam.find_game(s, "bo1")
+    assert bo1.game_dir == lib.resolve() / "steamapps/common/Call of Duty Black Ops"
+    assert bo1.compatdata == lib.resolve() / "steamapps/compatdata/42700"
     assert steam.find_game(s, "bo1").app_id == "42700"
 
 
@@ -131,10 +131,10 @@ def test_flatpak_steam_is_flagged(tmp_path):
 
 def test_uninstalled_manifest_is_ignored(tmp_path):
     _, lib = make_steam(tmp_path)
-    write(lib / "steamapps/appmanifest_10090.acf",
-          '"AppState" { "appid" "10090" "StateFlags" "1" "installdir" "Call of Duty World at War" }')
+    write(lib / "steamapps/appmanifest_42700.acf",
+          '"AppState" { "appid" "42700" "StateFlags" "1" "installdir" "Call of Duty Black Ops" }')
     s = steam.find_steam_roots(tmp_path, {})[0]
-    assert steam.find_game(s, "waw") is None
+    assert steam.find_game(s, "bo1") is None
 
 
 def test_capitalised_steamapps_and_config_libraryfolders_fallback(tmp_path):
@@ -184,9 +184,9 @@ def test_valve_proton_names_map_to_directories(tmp_path):
 def test_compatdata_prefers_the_games_own_library(tmp_path):
     root, lib = make_steam(tmp_path)
     for base in (root, lib):
-        (base / "steamapps/compatdata/10090/pfx").mkdir(parents=True)
+        (base / "steamapps/compatdata/42700/pfx").mkdir(parents=True)
     s = steam.find_steam_roots(tmp_path, {})[0]
-    assert steam.find_game(s, "waw").compatdata == lib.resolve() / "steamapps/compatdata/10090"
+    assert steam.find_game(s, "bo1").compatdata == lib.resolve() / "steamapps/compatdata/42700"
 
 
 def test_runtime_entry_point_from_toolmanifest(tmp_path):

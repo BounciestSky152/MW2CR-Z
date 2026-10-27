@@ -284,8 +284,6 @@ pb_open_portal( spot )
 				playFxOnTag( fx, portal.nodes[i], "tag_origin" );
 		}
 	}
-	if( isDefined( hub ) )
-		hub thread pb_portal_spin();
 
 	self iPrintLnBold( "Portal opened. Tap USE near it to pick a destination, then walk through." );
 }
@@ -302,16 +300,6 @@ pb_portal_fx()
 			return level._effect[ keys[i] ];
 	}
 	return undefined;
-}
-
-pb_portal_spin()
-{
-	self endon( "death" );
-	for( ;; )
-	{
-		self rotateRoll( 360, 2.5 );
-		wait 2.5;
-	}
 }
 
 pb_portal_think( portal )

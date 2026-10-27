@@ -14,8 +14,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-APP_IDS = {"waw": "10090", "bo1": "42700"}
-EXES = {"waw": "CoDWaW.exe", "bo1": "BlackOps.exe"}
+APP_IDS = {"bo1": "42700"}
+EXES = {"bo1": "BlackOps.exe"}
 FLATPAK_ID = "com.valvesoftware.Steam"
 
 _TOKEN_RE = re.compile(r'"((?:[^"\\]|\\.)*)"|([{}])|//[^\n]*')

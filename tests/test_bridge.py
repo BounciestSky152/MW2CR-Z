@@ -8,7 +8,7 @@ from portal_bridge.logwatch import LogTailer
 from portal_bridge.state import decode
 
 LINE = (
-    "  0:42 [PORTAL_BRIDGE] TRAVEL PB1|n=77|src=waw:nazi_zombie_factory|dst=bo1:zombie_theater|r=9"
+    "  0:42 [PORTAL_BRIDGE] TRAVEL PB1|n=77|src=bo1:zombie_cod5_factory|dst=bo1:zombie_theater|r=9"
     "|p0=3000~specialty_armorvest~zombie_thompson@20@140~zombie_thompson"
 )
 
@@ -37,12 +37,12 @@ def test_travel_swaps_games_and_translates(tmp_path):
     bridge, launcher = make_bridge(tmp_path)
     assert bridge.handle_line(LINE)
 
-    assert launcher.calls[0] == ("stop", "waw")
+    assert launcher.calls[0] == ("stop", "bo1")
     kind, game, map_id, payload = launcher.calls[-1]
     assert (kind, game, map_id) == ("launch", "bo1", "zombie_theater")
     state = decode(payload)
     assert state.round == 9
-    assert state.players[0].weapons[0].candidates[0] == "zombie_thompson"  # BO1 remakes reuse WaW names
+    assert state.players[0].weapons[0].candidates[0] == "zombie_thompson"  # kept: the original name comes first
     assert state.players[0].perks == ["specialty_armorvest"]
 
 
@@ -66,7 +66,7 @@ def test_unrelated_lines_are_ignored(tmp_path):
 
 def test_poll_picks_request_from_log(tmp_path):
     bridge, launcher = make_bridge(tmp_path)
-    log = tmp_path / "waw.log"
+    log = tmp_path / "bo1.log"
     log.write_text("old stuff\n" + LINE.replace("n=77", "n=1") + "\n")
     bridge.tailer.prime()  # history must not replay
     assert bridge.poll_once() == 0
@@ -92,13 +92,13 @@ def test_tailer_handles_truncation(tmp_path):
 def test_build_command_expands_placeholders():
     config = load_config()
     launcher = GameLauncher(config, dry_run=True)
-    cmd = launcher.build_command("waw", "nazi_zombie_factory", "PB1|n=1")
-    assert cmd[0].endswith("/CoDWaW.exe")
+    cmd = launcher.build_command("bo1", "zombie_moon", "PB1|n=1")
+    assert cmd[0].endswith("/launcher_ldr.exe")
     assert "{game_args}" not in cmd
-    assert cmd[-2:] == ["+devmap", "nazi_zombie_factory"]
+    assert cmd[-2:] == ["+devmap", "zombie_moon"]
     i = cmd.index("pb_state")
     assert cmd[i - 1:i + 2] == ["+set", "pb_state", "PB1|n=1"]
-    assert "pb_state" not in launcher.build_command("waw", "nazi_zombie_factory")
+    assert "pb_state" not in launcher.build_command("bo1", "zombie_moon")
 
 
 def test_local_override_is_merged(tmp_path):

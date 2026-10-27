@@ -34,6 +34,8 @@ pb_known_perks()
 pb_portal_fx_keys()
 {
 	keys = [];
+	// Blue first, like a Portal portal; the green glow every map has is the fallback.
+	keys[ keys.size ] = "powerup_on_solo";
 	keys[ keys.size ] = "powerup_on";
 	return keys;
 }

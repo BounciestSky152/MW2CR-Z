@@ -7,7 +7,7 @@ from pathlib import Path
 
 from . import __version__
 from .bridge import Bridge, TRAVEL_RE
-from .build import PLUTONIUM_SCRIPT_DIRS, PLUTONIUM_SCRIPTDATA, build
+from .build import PLUTONIUM_SCRIPT_DIRS, PLUTONIUM_SCRIPTDATA, build, missing_maps
 from .config import GAMES, ConfigError, load_config
 from .launcher import GameLauncher
 from .patcher import PatchError, patch_file
@@ -108,11 +108,6 @@ def _cmd_doctor(config, args) -> int:
             data = Path(pluto) / PLUTONIUM_SCRIPTDATA[game]
             check(data.is_dir(), f"Plutonium scriptdata folder {data}", "run: python -m portal_bridge install-plutonium")
 
-        args_file = launcher.args_file(game)
-        if args_file is not None:
-            wrapper = args_file.parent / "pb-wrap.sh"
-            check(wrapper.is_file(), f"Steam launch wrapper {wrapper}", "re-run: python -m portal_bridge linux-setup")
-
         for p in launcher.signal_paths(game):
             print(f"  [{'ok' if p.is_file() else '--'}] signal file {p}  (appears after your first portal trip)")
         logs = launcher.log_paths(game)
@@ -134,7 +129,7 @@ def _cmd_linux_setup(config, args) -> int:
 
     from .linux_setup import plan_linux_setup, write_plan
 
-    methods = {g: m for g, m in (("waw", args.waw), ("bo1", args.bo1)) if m != "skip"}
+    methods = {"bo1": args.bo1}
     plan = plan_linux_setup(
         methods,
         plutonium_dir=args.plutonium_dir,
@@ -153,10 +148,8 @@ def _cmd_linux_setup(config, args) -> int:
         return 1 if plan.problems else 0
     target = write_plan(plan, args.config_dir)
     print(f"wrote {target} ({', '.join(plan.games)})")
-    if plan.wrapper_dir is not None:
-        print(f"installed {plan.wrapper_dir / 'pb-wrap.sh'}")
     print("next: python -m portal_bridge install-plutonium   (Plutonium method)"
-          if any(m == "plutonium" for m in methods.values()) else
+          if args.bo1 == "plutonium" else
           "next: build and install mod.ff - see docs/LINUX.md")
     print("then: python -m portal_bridge doctor")
     return 1 if plan.problems else 0
@@ -190,6 +183,9 @@ def _cmd_install_plutonium(config, args) -> int:
             shutil.copyfile(src, dest)
             (pluto / PLUTONIUM_SCRIPTDATA[game]).mkdir(parents=True, exist_ok=True)
             print(f"{game}: installed {dest}")
+            hidden = missing_maps(config, game)
+            if hidden:
+                print(f"{game}: not in the portal list (map files not installed): {', '.join(hidden)}")
             installed += 1
             # A same-named script elsewhere in the virtual scripts/ folder would
             # shadow or double-load this one.
@@ -213,7 +209,7 @@ def _cmd_simulate(config, args) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="portal_bridge",
-        description="Portal travel between Call of Duty: World at War and Black Ops zombies maps.",
+        description="Portal travel between Call of Duty: Black Ops zombies maps.",
     )
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--config-dir", type=Path, help="directory holding bridge.json, maps.json, weapons.json")
@@ -230,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=_cmd_patch)
 
     p = sub.add_parser("launch", help="start a zombies map with the mod loaded")
-    p.add_argument("map", help="game:map_id, e.g. waw:nazi_zombie_factory")
+    p.add_argument("map", help="game:map_id, e.g. bo1:zombie_moon")
     p.add_argument("--dry-run", action="store_true", help="print the command instead of running it")
     p.set_defaults(func=_cmd_launch)
 
@@ -242,9 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("doctor", help="check game paths, launchers and log locations").set_defaults(func=_cmd_doctor)
 
     p = sub.add_parser("linux-setup", help="detect Steam, Proton and Plutonium and write config/bridge.local.json")
-    p.add_argument("--waw", choices=("plutonium", "proton", "steam", "skip"), default="plutonium",
-                   help="how to run World at War (default: plutonium)")
-    p.add_argument("--bo1", choices=("plutonium", "proton", "skip"), default="plutonium",
+    p.add_argument("--bo1", choices=("plutonium", "proton"), default="plutonium",
                    help="how to run Black Ops (default: plutonium)")
     p.add_argument("--plutonium-dir", type=Path, help="Plutonium folder (the one containing bin/ and storage/)")
     p.add_argument("--steam-dir", type=Path, help="Steam folder (the one containing steamapps/)")
@@ -253,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=_cmd_linux_setup)
 
     p = sub.add_parser("install-plutonium", help="copy the in-game script into Plutonium's storage folder")
-    p.add_argument("--game", choices=("waw", "bo1", "all"), default="all")
+    p.add_argument("--game", choices=("bo1", "all"), default="all")
     p.add_argument("--plutonium-dir", type=Path, help="override the folder from bridge.local.json")
     p.set_defaults(func=_cmd_install_plutonium)
 

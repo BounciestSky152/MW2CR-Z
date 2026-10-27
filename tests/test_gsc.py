@@ -96,7 +96,7 @@ def test_statements_end_with_semicolons(game, route):
 
 
 def test_bundle_is_self_contained():
-    out = bundle(all_sources("waw", "plutonium"))
+    out = bundle(all_sources("bo1", "plutonium"))
     assert not re.search(r"#include\s+maps\\_portal_bridge", out)
     assert out.count("#include maps\\_utility;") == 1
     assert "pb_give_perk" in out and "pb_catalog_maps" in out
@@ -139,10 +139,9 @@ def test_build_writes_both_layouts(tmp_path):
     for game in GAMES:
         assert f"{game}/mods/portal_bridge/maps/_portal_bridge.gsc" in written
         assert f"{game}/mods/portal_bridge/maps/_portal_bridge_platform.gsc" in written
-    assert "waw/plutonium/storage/t4/raw/scripts/sp/portal_bridge.gsc" in written
     assert "bo1/plutonium/storage/t5/raw/scripts/sp/portal_bridge.gsc" in written
-    assert "waw/plutonium/storage/t4/raw/scriptdata/portal_bridge_readme.txt" in written
-    csv = (tmp_path / "waw/mods/portal_bridge/mod.csv").read_text()
+    assert "bo1/plutonium/storage/t5/raw/scriptdata/portal_bridge_readme.txt" in written
+    csv = (tmp_path / "bo1/mods/portal_bridge/mod.csv").read_text()
     assert "rawfile,maps/_zombiemode.gsc" in csv and "rawfile,maps/_portal_bridge_platform.gsc" in csv
 
 
@@ -154,3 +153,22 @@ def test_patch_inserts_hook_first_in_main():
     assert "\r\n\t" + HOOK in out
     again, changed = patch_text(out)
     assert not changed and again == out
+
+
+def test_maps_you_dont_own_are_left_out(tmp_path):
+    from dataclasses import replace
+    from portal_bridge.build import missing_maps
+    config = load_config()
+    (tmp_path / "zone/Common").mkdir(parents=True)
+    for m in ("zombie_theater", "zombie_moon"):
+        (tmp_path / f"zone/Common/{m}.ff").write_text("")
+    config.games["bo1"] = replace(config.games["bo1"], game_dir=str(tmp_path))
+    catalog = generate_catalog(config, "bo1")
+    assert '"zombie_theater"' in catalog and '"zombie_moon"' in catalog
+    assert '"zombie_pentagon"' not in catalog
+    assert "Five" in missing_maps(config, "bo1")
+
+
+def test_unreadable_game_folder_keeps_every_map():
+    catalog = generate_catalog(load_config(), "bo1")  # default Windows path doesn't exist here
+    assert '"zombie_pentagon"' in catalog

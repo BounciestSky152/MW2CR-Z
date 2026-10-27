@@ -153,7 +153,7 @@ class GameLauncher:
                 "run: python3 -m portal_bridge linux-setup  (needed again after every fresh download)"
             raise FileNotFoundError(f"games.{game} working directory {cwd!r} doesn't exist - {hint}")
         if args_file is not None:
-            # Read (and deleted) by scripts/pb-wrap.sh, set as the game's Steam
+            # Read (and deleted) by a wrapper script set as the game's Steam
             # launch options; nothing goes through Steam's shell-built command line.
             args_file.parent.mkdir(parents=True, exist_ok=True)
             args_file.write_text("".join(a + "\n" for a in game_args), encoding="utf-8")

@@ -10,7 +10,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_DIR = REPO_ROOT / "config"
-GAMES = ("waw", "bo1")
+GAMES = ("bo1",)
 
 # Map ids and weapon names travel through dvars and console commands, so they
 # must stay free of separators, quotes and anything the engine tokenizes.
@@ -24,7 +24,7 @@ class ConfigError(ValueError):
 
 
 def wine_path(path: str) -> str:
-    """/home/me/Games/WaW -> Z:\\home\\me\\Games\\WaW (Wine maps Z: to /)."""
+    """/home/me/Games/BO1 -> Z:\\home\\me\\Games\\BO1 (Wine maps Z: to /)."""
     if len(path) >= 2 and path[1] == ":":
         return path.replace("/", "\\")
     return "Z:" + path.replace("/", "\\")
