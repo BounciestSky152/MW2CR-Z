@@ -138,14 +138,23 @@ def nacht() -> list[Box]:
     return b
 
 
-# Points of interest the zombies mode will use (wall buys, box, spawns).
+# Points of interest for the zombies mode: (x, y, z, yaw). Wall buys hang on
+# the inside of a wall facing into the room; yaw is the way the weapon faces.
 POINTS = {
-    "player_start": (320, 160, 8),
-    "box": (560, 40, 0),
-    "wallbuy_kar98k": (320, 2, 56),
-    "wallbuy_carbine": (636, 96, 56),
-    "wallbuy_thompson": (-200, 2, 56),
-    "wallbuy_shotgun": (160, 446, UP + 56),
+    "player_start": (320, 160, 8, 90),
+    "box": (560, 48, 0, 90),
+    "wallbuy_rifle": (320, 4, 56, 90),            # start room, south wall (Kar98k)
+    "wallbuy_carbine": (636, 96, 56, 180),        # start room, east wall (M1 Carbine)
+    "wallbuy_smg": (-100, 4, 56, 90),             # Help room, south wall (Thompson)
+    "wallbuy_shotgun": (240, 4, UP + 56, 90),     # upstairs, south wall (double barrel)
+    "stairs_top": (626, 400, UP + 8, 270),        # where stuck zombies reappear upstairs
+}
+
+# Which debris must be bought before a window can spawn zombies.
+WINDOW_NEEDS = {
+    "help_south": "help_door",
+    "help_north": "help_door",
+    "help_west": "help_door",
 }
 
 
@@ -156,9 +165,12 @@ def gsc_layout(boxes: list[Box]) -> str:
             f'\tb[ b.size ] = nacht_box( {x.x0}, {x.y0}, {x.z0}, {x.x1}, {x.y1}, {x.z1}, "{x.kind}", "{x.tag}" );'
         )
     lines += ["\treturn b;", "}", "", "nacht_points()", "{", "\tp = [];"]
-    for name, (x, y, z) in POINTS.items():
-        lines.append(f'\tp[ "{name}" ] = ( {x}, {y}, {z} );')
-    lines += ["\treturn p;", "}", ""]
+    for name, (x, y, z, yaw) in POINTS.items():
+        lines.append(f'\tp[ "{name}" ] = nacht_point( {x}, {y}, {z}, {yaw} );')
+    lines += ["\treturn p;", "}", "", "nacht_window_needs()", "{", "\tn = [];"]
+    for window, debris in WINDOW_NEEDS.items():
+        lines.append(f'\tn[ "{window}" ] = "{debris}";')
+    lines += ["\treturn n;", "}", ""]
     return "\n".join(lines)
 
 

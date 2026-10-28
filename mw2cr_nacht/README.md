@@ -1,29 +1,44 @@
-# Nacht der Untoten replica for MW2 Campaign Remastered
+# Nacht der Untoten for MW2 Campaign Remastered
 
-A script mod for [h2-mod](https://github.com/fedddddd/h2-mod) that builds Nacht der Untoten's layout out of props
-and collision already loaded in whatever MW2CR level you're on: start room, Help room behind its debris
-door, stairs blocked by debris, two rooms upstairs, and boarded windows.
+A mod for [h2-mod](https://github.com/alicealys/h2-mod) that builds Nacht der Untoten's layout out of props
+already loaded in an MW2CR level and runs a Nacht-style zombies mode in it.
 
-This is step one: the building only. Zombies, points, wall buys and the box come next.
+- **Menu:** a NACHT DER UNTOTEN button on the campaign main menu, with a level picker.
+- **Building:** start room, Help room behind its debris door, stairs blocked by debris, two rooms upstairs,
+  boarded windows.
+- **Zombies:** endless rounds, more and tougher each round. Zombies come to the windows, tear the boards
+  off and climb in. Hold Use near a window to rebuild it (+10 per board).
+- **Points:** 500 to start, +10 per hit, +60 per kill, +100 headshot kill, +130 knife kill.
+- **Buying:** four wall weapons (200 / 600 / 1200 / 1200, half price for ammo), Help door and stairs debris
+  (1000 each), mystery box (950).
+- **Power-ups:** Max Ammo, Double Points, Insta-Kill and Kaboom (kills everything, +400).
+- **Getting hit:** a jolt toward the zombie, screen shake and a red flash.
 
-## Install
+MW2CR has no zombie models, so the zombies are the level's own soldiers told to ignore everything and rush
+you; they only hurt you up close. The weapons are whatever that level has loaded, so they differ per level.
 
-1. Copy `mod/nacht` into your MW2CR folder's `mods` folder so you have `mods/nacht/scripts/nacht.gsc`.
-2. Start MW2CR through h2-mod, load the mod (Mods menu, or console: `loadmod mods/nacht`).
-3. Start any campaign level and stand somewhere flat and open.
-4. Open the console (`~`) and type `set nacht_build 1`. You're moved into the start room.
-   `set nacht_clear 1` removes it.
+## Install (Windows)
 
-## What to expect
+1. Install h2-mod: put `h2-mod.exe` in your MW2CR folder and run it once (say Yes to updates).
+2. Copy `mod/nacht` into your MW2CR folder's `mods` folder, so you have `mods/nacht/scripts/nacht.gsc`.
+3. Start h2-mod, open **Mods** on the main menu and load **Nacht der Untoten** (the game restarts).
+4. Pick **NACHT DER UNTOTEN** on the main menu, then a level. Once the level lets you move, Nacht is built
+   around you and round 1 starts.
 
-It only uses what the level has loaded, so it looks different on each level and won't look like the
-original's textures or lighting. The console prints which prop it picked for the walls, how many pieces it
-spawned, and whether the walls are solid. If something's wrong, send that output.
+Console alternatives (`~`): `set nacht_play 1` builds and starts here, `set nacht_build 1` only builds,
+`set nacht_clear 1` stops and removes everything.
 
-Enemies on the level will still attack while you build; `notarget` / `god` in the console help if cheats
-are allowed.
+## If something's wrong
 
-## Changing the layout
+Everything the mod does is printed to the console with `[nacht]` in front: the props it picked, how many
+pieces it placed, the weapons and spawners it found. Send those lines along with what you saw.
 
-Edit `layout.py` (rooms, windows, doors) or `nacht_template.gsc` (the builder), then run
-`python3 mw2cr_nacht/layout.py` to regenerate `mod/nacht/scripts/nacht.gsc`.
+Known limits: zombies don't know about Nacht's walls (the level's path network doesn't include them), so
+the mod nudges stuck zombies toward you and puts badly stuck ones back at a window. Levels whose start is
+a cutscene or vehicle won't work from the menu.
+
+## Changing it
+
+Edit `layout.py` (rooms, windows, doors, wall-buy spots) or `nacht_template.gsc` (builder and zombies
+mode), then run `python3 mw2cr_nacht/layout.py` to regenerate `mod/nacht/scripts/nacht.gsc`. The menu is
+`mod/nacht/ui_scripts/nacht/__init__.lua`.

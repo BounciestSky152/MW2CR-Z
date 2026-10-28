@@ -13,11 +13,18 @@ spec.loader.exec_module(layout)
 # H2 (MW2CR) builtins the script uses, checked against gsc-tool's h2 tables
 # and h2-mod's script extensions (print).
 H2_BUILTINS = {
-    "ceil", "clonebrushmodeltoscriptmodel", "delete", "getdvarint", "getentarray", "getpointinbounds",
-    "int", "iprintln", "issubstr", "notsolid", "print", "setdvar", "setdvarifuninitialized", "setmodel",
-    "setorigin", "setplayerangles", "solid", "spawn", "spawnstruct", "strtok", "tolower",
+    "abs", "bullettrace", "bullettracepassed", "ceil", "clonebrushmodeltoscriptmodel", "delete", "destroy",
+    "distance", "dodamage", "earthquake", "fadeovertime", "forceteleport", "getaiarray", "getcurrentweapon",
+    "getdvarint", "getentarray", "getpointinbounds", "getspawnerteamarray", "getsubstr", "getweaponmodel",
+    "getweaponslistall", "getweaponslistprimaries", "givemaxammo", "giveweapon", "hasweapon", "hide", "int",
+    "iprintln", "iprintlnbold", "isalive", "issubstr", "length", "newhudelem", "notsolid", "precacheshader",
+    "print", "randomint", "rotateyaw", "setdvar", "setdvarifuninitialized", "setgoalentity", "setgoalpos",
+    "setmodel", "setnormalhealth", "setorigin", "setplayerangles", "setshader", "settext", "setvalue", "show",
+    "solid", "spawn", "spawnstruct", "stalingradspawn", "strtok", "switchtoweapon", "takeallweapons",
+    "takeweapon", "tolower", "usebuttonpressed", "vectornormalize", "vectortoangles", "viewkick",
+    "weaponclass", "weaponinventorytype",
 }
-KEYWORDS = {"if", "for", "while", "foreach", "return", "isdefined", "wait"}
+KEYWORDS = {"if", "for", "while", "foreach", "return", "isdefined", "wait", "endon", "notify", "waittill"}
 
 
 def code():
@@ -55,3 +62,11 @@ def test_layout_has_nacht_rooms_and_entrances():
     assert sum(b.kind == "window" for b in boxes) >= 9
     # The stairs reach the upstairs floor.
     assert max(b.z1 for b in boxes if b.kind == "stair") == layout.UP
+
+
+def test_menu_script_and_mod_info():
+    import json
+    lua = (ROOT / "mod/nacht/ui_scripts/nacht/__init__.lua").read_text()
+    assert 'LUI.addmenubutton("main_campaign"' in lua and "nacht_autostart" in lua
+    info = json.loads((ROOT / "mod/nacht/info.json").read_text())
+    assert info["name"]
