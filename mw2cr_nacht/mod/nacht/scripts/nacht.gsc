@@ -67,7 +67,7 @@ nacht_say( text )
 {
 	print( "[nacht] " + text + "\n" );
 	if( isdefined( level.player ) )
-		level.player iprintln( text );
+		iprintln( text );
 }
 
 nacht_point( x, y, z, yaw )
@@ -552,7 +552,7 @@ nacht_zombies_start()
 	{
 		level.nacht_round++;
 		level.nacht_hud_round setvalue( level.nacht_round );
-		level.player iprintlnbold( "Round " + level.nacht_round );
+		iprintlnbold( "Round " + level.nacht_round );
 		nacht_round_run( level.nacht_round );
 		wait 8;
 	}
@@ -889,7 +889,7 @@ nacht_player_death_watch()
 {
 	level endon( "nacht_end" );
 	level.player waittill( "death" );
-	level.player iprintlnbold( "Game over - you survived " + ( level.nacht_round - 1 ) + " rounds" );
+	iprintlnbold( "Game over - you survived " + ( level.nacht_round - 1 ) + " rounds" );
 	nacht_say( "Game over on round " + level.nacht_round );
 }
 
@@ -925,7 +925,7 @@ nacht_spend( cost )
 {
 	if( level.nacht_points < cost )
 	{
-		level.player iprintln( "Not enough points (" + cost + " needed)" );
+		iprintln( "Not enough points (" + cost + " needed)" );
 		return false;
 	}
 	level.nacht_points -= cost;
@@ -1328,7 +1328,7 @@ nacht_powerup_drop( origin )
 	{
 		if( distance( m.origin, level.player.origin ) < 64 )
 		{
-			level.player iprintlnbold( type );
+			iprintlnbold( type );
 			level thread nacht_powerup_apply( type );
 			break;
 		}

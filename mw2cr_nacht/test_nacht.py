@@ -11,20 +11,24 @@ sys.modules["nacht_layout"] = layout
 spec.loader.exec_module(layout)
 
 # H2 (MW2CR) builtins the script uses, checked against gsc-tool's h2 tables
-# and h2-mod's script extensions (print).
-H2_BUILTINS = {
-    "abs", "bullettrace", "bullettracepassed", "ceil", "clonebrushmodeltoscriptmodel", "delete", "destroy",
-    "distance", "dodamage", "earthquake", "fadeovertime", "forceteleport", "getaiarray", "getcurrentweapon",
-    "getdvarint", "getentarray", "getpointinbounds", "getspawnerteamarray", "getsubstr", "getweaponmodel",
-    "getweaponslistall", "getweaponslistprimaries", "givemaxammo", "giveweapon", "hasweapon", "hide", "int",
-    "iprintln", "iprintlnbold", "isalive", "issubstr", "length", "newhudelem", "notsolid", "precacheshader",
-    "print", "randomint", "rotateyaw", "setdvar", "setdvarifuninitialized", "setgoalentity", "setgoalpos",
-    "setmodel", "setnormalhealth", "setorigin", "setplayerangles", "setshader", "settext", "setvalue", "show",
-    "solid", "spawn", "spawnstruct", "stalingradspawn", "strtok", "switchtoweapon", "takeallweapons",
-    "takeweapon", "tolower", "usebuttonpressed", "vectornormalize", "vectortoangles", "viewkick",
+# (h2_func.cpp / h2_meth.cpp) and h2-mod's extensions (print). Functions and
+# methods are separate: calling a function as a method fails to compile.
+H2_FUNCTIONS = {
+    "abs", "bullettrace", "bullettracepassed", "ceil", "distance", "earthquake", "getaiarray", "getdvarint",
+    "getentarray", "getspawnerteamarray", "getsubstr", "getweaponmodel", "int", "iprintln", "iprintlnbold",
+    "isalive", "issubstr", "length", "newhudelem", "precacheshader", "print", "randomint", "setdvar",
+    "setdvarifuninitialized", "spawn", "spawnstruct", "strtok", "tolower", "vectornormalize", "vectortoangles",
     "weaponclass", "weaponinventorytype",
 }
-KEYWORDS = {"if", "for", "while", "foreach", "return", "isdefined", "wait", "endon", "notify", "waittill"}
+H2_METHODS = {
+    "clonebrushmodeltoscriptmodel", "delete", "destroy", "dodamage", "fadeovertime", "forceteleport",
+    "getcurrentweapon", "getpointinbounds", "getweaponslistall", "getweaponslistprimaries", "givemaxammo",
+    "giveweapon", "hasweapon", "hide", "notsolid", "rotateyaw", "setgoalentity", "setgoalpos", "setmodel",
+    "setnormalhealth", "setorigin", "setplayerangles", "setshader", "settext", "setvalue", "show", "solid",
+    "stalingradspawn", "switchtoweapon", "takeallweapons", "takeweapon", "usebuttonpressed", "viewkick",
+}
+KEYWORDS = {"if", "for", "while", "foreach", "return", "isdefined", "wait", "endon", "notify", "waittill",
+            "thread", "else", "in"}
 
 
 def code():
@@ -37,11 +41,27 @@ def test_generated_script_is_up_to_date():
     assert (ROOT / "mod/nacht/scripts/nacht.gsc").read_text() == layout.generate()
 
 
-def test_every_call_is_defined_or_an_h2_builtin():
+def calls():
+    """(name, is_method) for every call; a method has its object on the same line."""
     c = code()
     defs = set(re.findall(r"^([a-z_0-9]+)\s*\(", c, re.M))
-    calls = set(re.findall(r"(?<![\w.])([a-z_0-9]+)\s*\(", c))
-    assert calls - defs - KEYWORDS <= H2_BUILTINS
+    out = set()
+    for m in re.finditer(r"\b([a-z_0-9]+)\s*\(", c):
+        name = m.group(1)
+        line_start = c.rfind("\n", 0, m.start()) + 1
+        if name in KEYWORDS or name in defs or m.start() == line_start:
+            continue
+        before = c[line_start:m.start()].rstrip(" \t")
+        word = re.search(r"(\w+)$", before)
+        is_method = bool(re.search(r"[\w\])]$", before)) and not (word and word.group(1) in KEYWORDS)
+        out.add((name, is_method))
+    return out
+
+
+def test_every_call_is_defined_or_an_h2_builtin():
+    found = calls()
+    assert {n for n, m in found if m} <= H2_METHODS
+    assert {n for n, m in found if not m} <= H2_FUNCTIONS
 
 
 def test_brackets_balance():
