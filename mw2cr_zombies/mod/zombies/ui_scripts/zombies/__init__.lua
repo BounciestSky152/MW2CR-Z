@@ -50,7 +50,7 @@ local howto = {
     { "WALL WEAPONS", "Aim at a wall to hang a weapon on it, or at a table or the floor to lay it there. Weapons for sale are outlined; buying one you already have refills its ammo for half price." },
     { "BARRIERS", "Aim through a doorway and the barrier spans it. Once the zombies are on, you can't get past a barrier until you buy it, and whatever is behind it opens up." },
     { "BUILD MODE", "Starts Nate's without zombies so you can place things in peace. Pick START ZOMBIES in the build menu when you're ready." },
-    { "STARTING WEAPON", "You start with a pistol that hits half again as hard as normal. MW2CR has no M1911, so it's the USP .45 if the level has one, otherwise the M9. Pick your own under STARTING WEAPON in the build menu." },
+    { "STARTING PISTOL", "You start with the M9." },
     { "POWER-UPS", "Killed zombies sometimes drop one: Max Ammo, Double Points, Insta-Kill, Kaboom (kills every zombie) or Bonus Points." },
     { "ZOMBIES", "Walkers at first, faster runners from round 3, and tough brutes from round 6. Three hits and you're down; a brute's hit counts double. Four seconds without a hit and you've recovered." },
 }
@@ -120,8 +120,8 @@ local prices = { 250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000, 4000, 
 local pending = {}
 
 -- The weapons the level has loaded, as the script lists them:
--- "name=what players call it=class;...". Pistols first for the starting weapon.
-local function weapons(pistolsfirst)
+-- "name=what players call it=class;...".
+local function weapons()
     local list = {}
     local seen = {}
     for entry in string.gmatch(getdvar("zm_weapons"), "[^;]+") do
@@ -131,23 +131,12 @@ local function weapons(pistolsfirst)
             seen[label] = (seen[label] or 0) + 1
         end
     end
-    local sorted = {}
     for _, w in ipairs(list) do
         if (seen[w.label] > 1) then
             w.label = w.label .. " (" .. w.name .. ")"
         end
-        if (not pistolsfirst or w.class == "pistol") then
-            table.insert(sorted, w)
-        end
     end
-    if (pistolsfirst) then
-        for _, w in ipairs(list) do
-            if (w.class ~= "pistol") then
-                table.insert(sorted, w)
-            end
-        end
-    end
-    return sorted
+    return list
 end
 
 -- Hands the pick to the script and goes back to the game.
@@ -174,10 +163,6 @@ LUI.MenuBuilder.registerType("zm_build", function(a1)
     button(menu, "REMOVE SOMETHING", "Aim at something you placed and press Fire or Use to remove it.", function()
         send(menu, "remove")
     end)
-    button(menu, "STARTING WEAPON", "The weapon you start with; it hits half again as hard as normal. MW2CR has no M1911.", function()
-        pending = { kind = "starter" }
-        LUI.FlowManager.RequestAddMenu(nil, "zm_build_weapons")
-    end)
     button(menu, "REMOVE EVERYTHING", "Take away every weapon and barrier you placed.", function()
         LUI.FlowManager.RequestAddMenu(nil, "zm_build_clear")
     end)
@@ -190,21 +175,16 @@ LUI.MenuBuilder.registerType("zm_build", function(a1)
 end)
 
 LUI.MenuBuilder.registerType("zm_build_weapons", function(a1)
-    local starter = pending.kind == "starter"
-    local menu = newmenu(a1, starter and "STARTING WEAPON" or "PLACE A WEAPON")
-    local list = weapons(starter)
+    local menu = newmenu(a1, "PLACE A WEAPON")
+    local list = weapons()
     if (#list == 0) then
         button(menu, "NO WEAPONS FOUND", "The level hasn't listed its weapons yet; try again in a moment.", function() end)
     end
     for i = 1, #list do
         local w = list[i]
         button(menu, string.upper(w.label), w.label .. " - " .. w.name .. " (" .. w.class .. ")", function()
-            if (starter) then
-                send(menu, "starter " .. w.name)
-            else
-                pending = { kind = "weapon", name = w.name, label = w.label }
-                LUI.FlowManager.RequestAddMenu(nil, "zm_build_price")
-            end
+            pending = { kind = "weapon", name = w.name, label = w.label }
+            LUI.FlowManager.RequestAddMenu(nil, "zm_build_price")
         end)
     end
     return finishmenu(menu)

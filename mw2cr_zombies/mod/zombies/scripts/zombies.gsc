@@ -25,7 +25,6 @@ main()
 	setdvarifuninitialized( "zm_off", 0 );
 	setdvarifuninitialized( "zm_best", 0 );
 	setdvarifuninitialized( "zm_items", 0 );
-	setdvarifuninitialized( "zm_starter", "" );
 	setdvarifuninitialized( "zm_build_mode", 0 );
 	if( getdvarint( "zm_off" ) != 0 )
 		return;
@@ -1124,9 +1123,6 @@ zm_zombie_damage()
 			continue;
 		self.zm_last_type = type;
 		self.zm_last_part = part;
-		// The starting pistol hits half again as hard.
-		if( type != "MOD_MELEE" && isdefined( level.zm_starter ) && level.player getcurrentweapon() == level.zm_starter )
-			amount = amount * 1.5;
 		self.zm_hp -= amount;
 		if( level.zm_insta )
 			self.zm_hp = 0;
@@ -1248,7 +1244,6 @@ zm_setup_player()
 	// you; zombies come for you because the mod sends them.
 	level.player.ignoreme = true;
 	weapon = zm_starting_weapon();
-	level.zm_starter = weapon;
 	if( isdefined( weapon ) )
 	{
 		offhands = level.player getweaponslistoffhands();
@@ -1265,18 +1260,10 @@ zm_setup_player()
 	level.player setnormalhealth( 1 );
 }
 
-// The one picked in the build menu; else an M1911 (MW2CR has none: it was
-// never in MW2) or the USP .45, its closest relative; else the level's own
-// pistol. It hits half again as hard as normal.
+// The M9 (the level's own pistol); any other pistol if it isn't loaded.
 zm_starting_weapon()
 {
-	picked = getdvar( "zm_starter" );
-	if( picked != "" && isdefined( zm_find_weapon( strtok( picked, " " ) ) ) )
-	{
-		print( "[zombies] starting weapon (picked in the build menu): " + zm_weapon_name( picked ) );
-		return picked;
-	}
-	weapon = zm_find_weapon( strtok( "colt45 m1911 colt1911 usp usp_tactical", " " ) );
+	weapon = zm_find_weapon( strtok( "beretta", " " ) );
 	if( !isdefined( weapon ) )
 	{
 		foreach( w in level.zm_pool )
@@ -1286,7 +1273,7 @@ zm_starting_weapon()
 		}
 	}
 	if( isdefined( weapon ) )
-		print( "[zombies] starting pistol: " + zm_weapon_name( weapon ) + " (" + weapon + "); MW2CR has no M1911" );
+		print( "[zombies] starting pistol: " + zm_weapon_name( weapon ) + " (" + weapon + ")" );
 	return weapon;
 }
 
@@ -1392,8 +1379,6 @@ zm_build_listener()
 			level thread zm_pick( true );
 		else if( what == "remove" )
 			level thread zm_pick( false );
-		else if( what == "starter" && args.size >= 2 )
-			level thread zm_set_starter( args[1] );
 		else if( what == "clear" )
 			level thread zm_clear_items();
 		else if( what == "start" )
@@ -1422,14 +1407,6 @@ zm_item_color( item )
 	if( item.kind == "weapon" )
 		return 5;
 	return 1;
-}
-
-zm_set_starter( weapon )
-{
-	executecommand( "seta zm_starter " + weapon );
-	level.zm_starter = weapon;
-	zm_give_weapon( weapon );
-	iprintlnbold( "Starting weapon: " + zm_weapon_name( weapon ) );
 }
 
 // Saved as "w weapon cost x y z pitch yaw roll" or "b cost x y z yaw left

@@ -16,7 +16,6 @@ can't leave, and zombies come in endless rounds.
   - **PLACE A BARRIER:** pick a price, then aim through a doorway. The preview is a pile of chairs that sizes
     itself to the doorway. Once the zombies are on, you can't get past it until you buy it.
   - **MOVE SOMETHING / REMOVE SOMETHING:** aim at something you placed (it lights up), then Fire or Use.
-  - **STARTING WEAPON:** what you start with (it hits half again as hard as normal).
   - **REMOVE EVERYTHING**, and in build mode **START ZOMBIES**.
 
   Everything you place is saved in your config and comes back next game.
@@ -28,8 +27,7 @@ can't leave, and zombies come in endless rounds.
 - **Getting hit:** three hits and you're down (a brute's hit counts double); four seconds without a hit and
   you've recovered.
 - **Points:** 500 to start, +10 per hit, +60 per kill, +100 headshot kill, +130 knife kill.
-- **Starting pistol:** MW2CR has no M1911 (it was never in MW2), so it's the USP .45 if the level has it,
-  otherwise the M9, unless you pick another in the build menu.
+- **Starting pistol:** the M9.
 - **Power-ups:** Max Ammo, Double Points, Insta-Kill, Kaboom (kills every zombie) and Bonus Points.
 - **No loading video:** the Wolverines! loading video and its sound are skipped (h2-mod's plain loading screen
   shows instead) and the level starts by itself once loaded.
