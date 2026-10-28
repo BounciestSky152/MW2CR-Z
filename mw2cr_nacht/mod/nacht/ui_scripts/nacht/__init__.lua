@@ -11,9 +11,14 @@ local levels = {
 }
 
 local function startlevel(level)
-    Engine.SetDvarString("nacht_autostart", "1")
-    LUI.FlowManager.PushMenuStackToDVar()
-    Engine.StreamingInstallMap(level.map, "set nacht_autostart 1; devmap " .. level.map .. ";")
+    -- Same form the game's own level select uses: commands run as the level starts.
+    local cmd = "set nacht_autostart 1; devmap " .. level.map .. ";"
+    pcall(function() LUI.FlowManager.PushMenuStackToDVar() end)
+    if (Engine.StreamingInstallMap) then
+        Engine.StreamingInstallMap(level.map, cmd)
+    else
+        Engine.Exec(cmd)
+    end
 end
 
 LUI.addmenubutton("main_campaign", {

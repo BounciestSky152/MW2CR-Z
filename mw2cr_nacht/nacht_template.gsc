@@ -1,3 +1,31 @@
+// Remove the level's own soldiers, keeping their spawners for zombies.
+// Enemy spawners are preferred; levels without them (S.S.D.D.) use friendly
+// ones switched to the enemy team, so shooting them isn't friendly fire.
+nacht_clear_level_ai()
+{
+	enemies = [];
+	others = [];
+	foreach( s in getspawnerarray() )
+	{
+		if( !isdefined( s.classname ) || !issubstr( s.classname, "actor" ) )
+			continue;
+		if( isdefined( s.team ) && s.team == "axis" )
+			enemies[ enemies.size ] = s;
+		else
+			others[ others.size ] = s;
+	}
+	level.nacht_spawners = enemies;
+	level.nacht_switch_team = false;
+	if( enemies.size == 0 )
+	{
+		level.nacht_spawners = others;
+		level.nacht_switch_team = true;
+	}
+	print( "[nacht] spawners: " + enemies.size + " enemy, " + others.size + " other\n" );
+	foreach( ai in getaiarray() )
+		ai delete();
+}
+
 // Nacht der Untoten replica for Modern Warfare 2 Campaign Remastered (h2-mod).
 //
 // Builds Nacht's layout out of props and collision already loaded in the
@@ -22,6 +50,7 @@ main()
 	precacheshader( "white" );
 	level.nacht_ents = [];
 	level.nacht_pieces = [];
+	level.nacht_probe_count = 0;
 	level thread nacht_watch();
 }
 
@@ -32,6 +61,7 @@ nacht_watch()
 	wait 3;
 
 	// Started from the menu: wait for the level's intro to hand over control.
+	print( "[nacht] autostart=" + getdvarint( "nacht_autostart" ) + "\n" );
 	if( getdvarint( "nacht_autostart" ) != 0 )
 	{
 		setdvar( "nacht_autostart", 0 );
@@ -438,6 +468,11 @@ nacht_turn( from, to )
 // and what to spawn later.
 nacht_measure( model, brush, angles, probe_at )
 {
+	// Freed entity slots aren't reused straight away; don't spawn hundreds of
+	// probes in a single frame.
+	level.nacht_probe_count++;
+	if( level.nacht_probe_count % 12 == 0 )
+		wait 0.05;
 	probe = spawn( "script_model", probe_at );
 	probe.angles = angles;
 	if( isdefined( brush ) )
@@ -534,7 +569,7 @@ nacht_zombies_start()
 	nacht_clear_level_ai();
 	if( level.nacht_spawners.size == 0 )
 	{
-		nacht_say( "This level has no enemy spawners to turn into zombies - try another level." );
+		nacht_say( "This level has no soldier spawners to turn into zombies - try another level." );
 		return;
 	}
 
@@ -703,9 +738,13 @@ nacht_spawn_zombie( health )
 	spawner = level.nacht_spawners[ randomint( level.nacht_spawners.size ) ];
 
 	spawner.count = 1;
+	if( level.nacht_switch_team )
+		spawner setspawnerteam( "axis" );
 	z = spawner stalingradspawn();
 	if( !isdefined( z ) || !isalive( z ) )
 		return undefined;
+	if( level.nacht_switch_team )
+		z.team = "axis";
 
 	z forceteleport( win.outside, ( 0, win.yaw_in, 0 ) );
 	z.ignoreall = true;
@@ -1319,7 +1358,10 @@ nacht_powerup_drop( origin )
 	types = strtok( "Max Ammo,Double Points,Insta-Kill,Kaboom", "," );
 	type = types[ randomint( types.size ) ];
 	m = nacht_extra( spawn( "script_model", origin + ( 0, 0, 32 ) ) );
-	model = getweaponmodel( level.player getcurrentweapon() );
+	weapon = level.player getcurrentweapon();
+	if( !isdefined( weapon ) || weapon == "none" )
+		weapon = level.nacht_pool[0];
+	model = getweaponmodel( weapon );
 	if( isdefined( model ) && model != "" )
 		m setmodel( model );
 	m rotateyaw( 3600, 25 );

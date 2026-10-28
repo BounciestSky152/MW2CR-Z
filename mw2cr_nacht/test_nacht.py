@@ -15,7 +15,7 @@ spec.loader.exec_module(layout)
 # methods are separate: calling a function as a method fails to compile.
 H2_FUNCTIONS = {
     "abs", "bullettrace", "bullettracepassed", "ceil", "distance", "earthquake", "getaiarray", "getdvarint",
-    "getentarray", "getspawnerteamarray", "getsubstr", "getweaponmodel", "int", "iprintln", "iprintlnbold",
+    "getentarray", "getspawnerarray", "getspawnerteamarray", "getsubstr", "getweaponmodel", "int", "iprintln", "iprintlnbold",
     "isalive", "issubstr", "length", "newhudelem", "precacheshader", "print", "randomint", "setdvar",
     "setdvarifuninitialized", "spawn", "spawnstruct", "strtok", "tolower", "vectornormalize", "vectortoangles",
     "weaponclass", "weaponinventorytype",
@@ -24,7 +24,7 @@ H2_METHODS = {
     "clonebrushmodeltoscriptmodel", "delete", "destroy", "dodamage", "fadeovertime", "forceteleport",
     "getcurrentweapon", "getpointinbounds", "getweaponslistall", "getweaponslistprimaries", "givemaxammo",
     "giveweapon", "hasweapon", "hide", "notsolid", "rotateyaw", "setgoalentity", "setgoalpos", "setmodel",
-    "setnormalhealth", "setorigin", "setplayerangles", "setshader", "settext", "setvalue", "show", "solid",
+    "setnormalhealth", "setorigin", "setspawnerteam", "setplayerangles", "setshader", "settext", "setvalue", "show", "solid",
     "stalingradspawn", "switchtoweapon", "takeallweapons", "takeweapon", "usebuttonpressed", "viewkick",
 }
 KEYWORDS = {"if", "for", "while", "foreach", "return", "isdefined", "wait", "endon", "notify", "waittill",
