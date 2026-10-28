@@ -41,6 +41,13 @@ main()
 			level.zm_knife = name;
 		}
 	}
+	// The Blender mystery box (assets/mystery_box), once it's built into the
+	// mod's mod.ff as the model zm_mystery_box.
+	if( assetexists( "xmodel", "zm_mystery_box" ) )
+	{
+		precachemodel( "zm_mystery_box" );
+		level.zm_box_prop = "zm_mystery_box";
+	}
 }
 
 // Where you start inside Nate's Sports Bar & Grill (found in-game).
@@ -1563,14 +1570,15 @@ zm_prop( model )
 	return m;
 }
 
-// A stand-in until the Blender model (assets/mystery_box) can be loaded: a
-// crate or chest from the level, else whatever the barriers use.
+// The Blender model if mod.ff has it (see main); until then a crate or chest
+// from the level, else whatever the barriers use.
 zm_box_model()
 {
 	if( !isdefined( level.zm_box_prop_found ) )
 	{
 		level.zm_box_prop_found = true;
-		level.zm_box_prop = zm_find_model( "chest,crate,case,box" );
+		if( !isdefined( level.zm_box_prop ) )
+			level.zm_box_prop = zm_find_model( "chest,crate,case,box" );
 		if( !isdefined( level.zm_box_prop ) )
 			level.zm_box_prop = zm_barrier_model();
 		print( "[zombies] mystery box look: " + zm_find_model_text( level.zm_box_prop ) );
