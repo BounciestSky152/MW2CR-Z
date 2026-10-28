@@ -379,6 +379,7 @@ zm_init()
 	level.zm_insta = false;
 	level.zm_rounds_on = false;
 	level.zm_placing = false;
+	level.zm_box_busy = false;
 	level.zm_zombies = [];
 	level.zm_ents = [];
 	level.zm_buys = [];
@@ -1373,6 +1374,8 @@ zm_build_listener()
 		what = args[0];
 		if( what == "weapon" && args.size >= 3 )
 			level thread zm_place( zm_new_item( "weapon", args[1], int( args[2] ) ) );
+		else if( what == "box" && args.size >= 2 )
+			level thread zm_place( zm_new_item( "box", undefined, int( args[1] ) ) );
 		else if( what == "barrier" && args.size >= 2 )
 			level thread zm_place( zm_new_item( "barrier", undefined, int( args[1] ) ) );
 		else if( what == "move" )
@@ -1399,6 +1402,8 @@ zm_item_name( item )
 {
 	if( item.kind == "weapon" )
 		return zm_weapon_name( item.weapon );
+	if( item.kind == "box" )
+		return "Mystery Box";
 	return "Barrier";
 }
 
@@ -1406,11 +1411,14 @@ zm_item_color( item )
 {
 	if( item.kind == "weapon" )
 		return 5;
+	if( item.kind == "box" )
+		return 4;
 	return 1;
 }
 
-// Saved as "w weapon cost x y z pitch yaw roll" or "b cost x y z yaw left
-// right" (how far the doorway reaches either side).
+// Saved as "w weapon cost x y z pitch yaw roll", "x cost x y z yaw" (the
+// mystery box) or "b cost x y z yaw left right" (how far the doorway reaches
+// either side).
 zm_load_items()
 {
 	count = getdvarint( "zm_items" );
@@ -1439,6 +1447,13 @@ zm_parse_item( text )
 		item.angles = ( int( parts[6] ), int( parts[7] ), int( parts[8] ) );
 		return item;
 	}
+	if( parts.size >= 6 && parts[0] == "x" )
+	{
+		item = zm_new_item( "box", undefined, int( parts[1] ) );
+		item.origin = ( int( parts[2] ), int( parts[3] ), int( parts[4] ) );
+		item.yaw = int( parts[5] );
+		return item;
+	}
 	if( parts.size >= 8 && parts[0] == "b" )
 	{
 		item = zm_new_item( "barrier", undefined, int( parts[1] ) );
@@ -1455,6 +1470,8 @@ zm_item_text( item )
 {
 	if( item.kind == "weapon" )
 		return "w " + item.weapon + " " + item.cost + " " + zm_vec_text( item.origin ) + " " + zm_vec_text( item.angles );
+	if( item.kind == "box" )
+		return "x " + item.cost + " " + zm_vec_text( item.origin ) + " " + int( item.yaw );
 	return "b " + item.cost + " " + zm_vec_text( item.origin ) + " " + int( item.yaw ) + " " + int( item.left ) + " " + int( item.right );
 }
 
@@ -1475,6 +1492,8 @@ zm_add_item( item )
 	at = item.origin;
 	if( item.kind == "barrier" )
 		at = ( item.end_a + item.end_b ) * 0.5 + ( 0, 0, 40 );
+	if( item.kind == "box" )
+		at = item.origin + ( 0, 0, 24 );
 	b = zm_buy( item.kind, at, item.cost );
 	b.weapon = item.weapon;
 	b.item = item;
@@ -1525,6 +1544,11 @@ zm_item_models( item )
 		item.ents[0] = zm_prop( getweaponmodel( item.weapon ) );
 		return;
 	}
+	if( item.kind == "box" )
+	{
+		item.ents[0] = zm_prop( zm_box_model() );
+		return;
+	}
 	model = zm_barrier_model();
 	for( i = 0; i < 7; i++ )
 		item.ents[i] = zm_prop( model );
@@ -1537,6 +1561,21 @@ zm_prop( model )
 		m setmodel( model );
 	m notsolid();
 	return m;
+}
+
+// A stand-in until the Blender model (assets/mystery_box) can be loaded: a
+// crate or chest from the level, else whatever the barriers use.
+zm_box_model()
+{
+	if( !isdefined( level.zm_box_prop_found ) )
+	{
+		level.zm_box_prop_found = true;
+		level.zm_box_prop = zm_find_model( "chest,crate,case,box" );
+		if( !isdefined( level.zm_box_prop ) )
+			level.zm_box_prop = zm_barrier_model();
+		print( "[zombies] mystery box look: " + zm_find_model_text( level.zm_box_prop ) );
+	}
+	return level.zm_box_prop;
 }
 
 // Chairs or stools from the level if it has them as separate props, else the
@@ -1586,6 +1625,13 @@ zm_item_move( item )
 		m = item.ents[0];
 		m.origin = item.origin;
 		m.angles = item.angles;
+		return;
+	}
+	if( item.kind == "box" )
+	{
+		m = item.ents[0];
+		m.origin = item.origin;
+		m.angles = ( 0, item.yaw, 0 );
 		return;
 	}
 	right = anglestoright( ( 0, item.yaw, 0 ) );
@@ -1827,6 +1873,12 @@ zm_aim_item( item, turn )
 		down = bullettrace( back + ( 0, 0, 8 ), back - ( 0, 0, 300 ), false, level.player );
 		ground = down[ "position" ];
 	}
+	if( item.kind == "box" )
+	{
+		item.yaw = view[1] + 90 + turn;
+		item.origin = ground;
+		return zm_in_nates_box( ground, 24 );
+	}
 	item.yaw = view[1] + turn;
 	right = anglestoright( ( 0, item.yaw, 0 ) );
 	mid = ground + ( 0, 0, 72 );
@@ -1963,6 +2015,14 @@ zm_buy_text( b )
 {
 	if( b.kind == "barrier" )
 		return "Press [Use] to clear the barrier [" + b.cost + "]";
+	if( b.kind == "box" )
+	{
+		if( isdefined( level.zm_box_offer ) && level.zm_box_at == b )
+			return "Press [Use] to take the " + zm_weapon_name( level.zm_box_offer );
+		if( level.zm_box_busy )
+			return "";
+		return "Press [Use] for a random weapon [" + b.cost + "]";
+	}
 	if( level.player hasweapon( b.weapon ) )
 		return "Press [Use] for ammo [" + int( b.cost / 2 ) + "]";
 	return "Press [Use] to buy " + zm_weapon_name( b.weapon ) + " [" + b.cost + "]";
@@ -1983,6 +2043,17 @@ zm_use_buy( b )
 			iprintlnbold( "The way is clear" );
 			level thread zm_update_rooms();
 		}
+		return;
+	}
+	if( b.kind == "box" )
+	{
+		if( isdefined( level.zm_box_offer ) && level.zm_box_at == b )
+		{
+			zm_give_weapon( level.zm_box_offer );
+			level.zm_box_offer = undefined;
+		}
+		else if( !level.zm_box_busy && zm_spend( b.cost ) )
+			level thread zm_box_spin( b );
 		return;
 	}
 	if( level.player hasweapon( b.weapon ) )
@@ -2071,4 +2142,33 @@ zm_powerup_apply( type )
 		}
 		zm_add_points( 400 );
 	}
+}
+
+// The mystery box: weapons flick by above it for three seconds, then the one
+// it lands on is yours if you take it within 10 seconds.
+zm_box_spin( b )
+{
+	level endon( "zm_end" );
+	level.zm_box_busy = true;
+	level.zm_box_at = b;
+	showcase = zm_extra( spawn( "script_model", b.origin ) );
+	showcase notsolid();
+	choice = undefined;
+	for( i = 0; i < 20; i++ )
+	{
+		choice = level.zm_pool[ randomint( level.zm_pool.size ) ];
+		model = getweaponmodel( choice );
+		if( isdefined( model ) && model != "" )
+			showcase setmodel( model );
+		showcase.origin = b.origin + ( 0, 0, 8 + i );
+		showcase.angles = ( 0, b.item.yaw, 0 );
+		wait 0.15;
+	}
+	// zm_use_buy clears the offer when it's taken.
+	level.zm_box_offer = choice;
+	for( t = 0; t < 100 && isdefined( level.zm_box_offer ); t++ )
+		wait 0.1;
+	level.zm_box_offer = undefined;
+	showcase delete();
+	level.zm_box_busy = false;
 }

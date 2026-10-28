@@ -49,6 +49,7 @@ local howto = {
     { "BUILDING", "Nothing is for sale until you place it. In game, press Esc and pick BUILD MENU: choose a weapon or a barrier and its price. " .. placehelp .. " Everything you place is remembered for next time." },
     { "WALL WEAPONS", "Aim at a wall to hang a weapon on it, or at a table or the floor to lay it there. Weapons for sale are outlined; buying one you already have refills its ammo for half price." },
     { "BARRIERS", "Aim through a doorway and the barrier spans it. Once the zombies are on, you can't get past a barrier until you buy it, and whatever is behind it opens up." },
+    { "MYSTERY BOX", "Place one with the build menu. It gives a random weapon from the level; take it within 10 seconds." },
     { "BUILD MODE", "Starts Nate's without zombies so you can place things in peace. Pick START ZOMBIES in the build menu when you're ready." },
     { "STARTING PISTOL", "You start with the M9." },
     { "POWER-UPS", "Killed zombies sometimes drop one: Max Ammo, Double Points, Insta-Kill, Kaboom (kills every zombie) or Bonus Points." },
@@ -157,6 +158,10 @@ LUI.MenuBuilder.registerType("zm_build", function(a1)
         pending = { kind = "barrier", label = "Barrier" }
         LUI.FlowManager.RequestAddMenu(nil, "zm_build_price")
     end)
+    button(menu, "PLACE A MYSTERY BOX", "Pick its price, then aim at the floor or a table where it goes. It gives a random weapon; take it within 10 seconds. " .. placehelp, function()
+        pending = { kind = "box", label = "Mystery Box" }
+        LUI.FlowManager.RequestAddMenu(nil, "zm_build_price")
+    end)
     button(menu, "MOVE SOMETHING", "Aim at something you placed and press Fire or Use to pick it up, then place it again.", function()
         send(menu, "move")
     end)
@@ -197,6 +202,8 @@ LUI.MenuBuilder.registerType("zm_build_price", function(a1)
         button(menu, tostring(price), placehelp, function()
             if (pending.kind == "barrier") then
                 send(menu, "barrier " .. price)
+            elseif (pending.kind == "box") then
+                send(menu, "box " .. price)
             else
                 send(menu, "weapon " .. pending.name .. " " .. price)
             end

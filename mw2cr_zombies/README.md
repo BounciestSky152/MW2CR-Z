@@ -15,6 +15,9 @@ can't leave, and zombies come in endless rounds.
     places it, Aim turns it 15 degrees, Melee cancels.
   - **PLACE A BARRIER:** pick a price, then aim through a doorway. The preview is a pile of chairs that sizes
     itself to the doorway. Once the zombies are on, you can't get past it until you buy it.
+  - **PLACE A MYSTERY BOX:** pick a price, then aim at the floor or a table. It gives a random weapon; take it
+    within 10 seconds. It shows as a crate from the level until the Blender model in `assets/mystery_box` can be
+    loaded.
   - **MOVE SOMETHING / REMOVE SOMETHING:** aim at something you placed (it lights up), then Fire or Use.
   - **REMOVE EVERYTHING**, and in build mode **START ZOMBIES**.
 
