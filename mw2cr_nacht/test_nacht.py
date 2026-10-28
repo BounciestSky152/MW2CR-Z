@@ -14,7 +14,7 @@ spec.loader.exec_module(layout)
 # (h2_func.cpp / h2_meth.cpp) and h2-mod's extensions (print, executecommand). Functions and
 # methods are separate: calling a function as a method fails to compile.
 H2_FUNCTIONS = {
-    "anglestoforward", "executecommand", "getallnodes", "getdvar", "gettime", "sighttracepassed",
+    "anglestoforward", "distance2d", "executecommand", "getallnodes", "getdvar", "gettime", "sighttracepassed",
     "abs", "bullettrace", "bullettracepassed", "ceil", "distance", "earthquake", "getaiarray", "getdvarint",
     "getentarray", "getspawnerarray", "getspawnerteamarray", "getsubstr", "getweaponmodel", "int", "iprintln", "iprintlnbold",
     "isalive", "issubstr", "length", "newhudelem", "precacheshader", "print", "randomint", "setdvar",

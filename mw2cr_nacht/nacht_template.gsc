@@ -23,10 +23,11 @@ main()
 	setdvarifuninitialized( "nacht_autostart", 0 );
 	setdvarifuninitialized( "nacht_budget", 1100 );
 	setdvarifuninitialized( "nacht_here", 0 );
-	// Where arena mode was last started on this level ("x y z"), saved to the
-	// config so the next start from the menu can drop you straight there.
-	level.nacht_arena_dvar = "nacht_arena_" + getdvar( "mapname" );
-	setdvarifuninitialized( level.nacht_arena_dvar, "" );
+	// The play area picked on this level: "start|second building", plus the
+	// route walked between them, saved to the config (seta) for next time.
+	level.nacht_setup_dvar = "nacht_setup_" + getdvar( "mapname" );
+	level.nacht_route_dvar = "nacht_route_" + getdvar( "mapname" ) + "_";
+	setdvarifuninitialized( level.nacht_setup_dvar, "" );
 	precacheshader( "white" );
 	level.nacht_ents = [];
 	level.nacht_pieces = [];
@@ -71,7 +72,7 @@ nacht_watch()
 		{
 			setdvar( "nacht_here", 0 );
 			nacht_clear();
-			level thread nacht_arena_start( level.player.origin );
+			level thread nacht_arena_start( level.player.origin, false );
 		}
 		if( getdvarint( "nacht_clear" ) != 0 )
 		{
@@ -1475,40 +1476,146 @@ nacht_powerup_apply( type )
 
 
 // ---------------------------------------------------------------------------
-// Arena mode: zombies in a real building of the level (Burger Town)
+// Arena mode: zombies in real buildings of the level (Nate's Sports Bar &
+// Grill and CRB Financial on Wolverines!)
 //
-// The level's path network already covers the building, so zombies walk in
-// through its real doors. Indoor spots (path nodes with a roof overhead) near
-// where you started get the wall buys and the box; outdoor nodes further out
-// are where zombies appear, picked out of your sight.
+// The level's path network already covers the buildings, so zombies walk in
+// through their real doors. Indoor spots (path nodes with a roof overhead)
+// get the wall buys and the box; outdoor nodes further out are where zombies
+// appear, picked out of your sight. You're kept inside the two buildings and
+// on the route between them.
 
 nacht_arena_autostart()
 {
 	level endon( "nacht_end" );
 	nacht_collect_weapons();
 	level thread nacht_level_cleaner();
-	saved = nacht_parse_vec( getdvar( level.nacht_arena_dvar ) );
-	if( isdefined( saved ) )
+	if( !nacht_setup_load() )
+		nacht_setup_walk();
+	else
 	{
-		nacht_say( "Taking you to the saved spot..." );
+		nacht_say( "Taking you to " + nacht_place_name( 0 ) + "..." );
 		wait 2;
-		level.player setorigin( saved );
-		wait 1;
-		setdvar( "nacht_here", 1 );
-		return;
 	}
+	level.player setorigin( level.nacht_start );
+	wait 0.5;
+	level thread nacht_arena_start( level.nacht_start, true );
+}
+nacht_arena_start( center, fenced )
+{
+	level endon( "nacht_end" );
+	level.nacht_mode = "arena";
+	level.nacht_anchor = center;
+	level.nacht_region = undefined;
+	if( fenced )
+	{
+		nacht_region_build();
+		level thread nacht_fence();
+	}
+	nacht_zombies_start();
+}
 
-	// First time on this level: walk there (the level is emptied for you).
+// --- The play area: a start building, a second building, the route between ---
+
+nacht_place_name( which )
+{
+	if( getdvar( "mapname" ) == "invasion" )
+	{
+		if( which == 0 )
+			return "Nate's Sports Bar & Grill";
+		return "CRB Financial";
+	}
+	if( which == 0 )
+		return "the start building";
+	return "the second building";
+}
+
+nacht_vec_text( v )
+{
+	return int( v[0] ) + " " + int( v[1] ) + " " + int( v[2] );
+}
+
+nacht_setup_load()
+{
+	parts = strtok( getdvar( level.nacht_setup_dvar ), "|" );
+	if( parts.size < 2 )
+		return false;
+	level.nacht_start = nacht_parse_vec( parts[0] );
+	level.nacht_second = nacht_parse_vec( parts[1] );
+	if( !isdefined( level.nacht_start ) || !isdefined( level.nacht_second ) )
+		return false;
+	level.nacht_route = [];
+	count = getdvarint( level.nacht_route_dvar + "n" );
+	for( i = 0; i < count; i++ )
+	{
+		point = nacht_parse_vec( getdvar( level.nacht_route_dvar + i ) );
+		if( isdefined( point ) )
+			level.nacht_route[ level.nacht_route.size ] = point;
+	}
+	return true;
+}
+
+// First time: the level is emptied, you pick the start spot inside the first
+// building, then walk to the second one. The way you walk is the way you'll
+// be allowed to go between them.
+nacht_setup_walk()
+{
+	level endon( "nacht_end" );
+	nacht_hold_use( "Go inside " + nacht_place_name( 0 ) + " to where you want to start, then hold [Use] for 2 seconds" );
+	level.nacht_start = level.player.origin;
+	iprintlnbold( "Start saved" );
+	wait 2;
+
+	level.nacht_route = [];
+	last = level.player.origin;
+	level.nacht_route[0] = last;
 	held = 0;
 	shown = 0;
 	for( ;; )
 	{
 		if( gettime() > shown )
 		{
-			if( getdvar( "mapname" ) == "invasion" )
-				iprintlnbold( "Walk into Burger Town, then hold [Use] for 2 seconds" );
-			else
-				iprintlnbold( "Walk into the building, then hold [Use] for 2 seconds" );
+			iprintlnbold( "Now walk to " + nacht_place_name( 1 ) + " the way you want to be allowed to go, then hold [Use] for 2 seconds inside" );
+			shown = gettime() + 15000;
+		}
+		if( distance( level.player.origin, last ) > 96 )
+		{
+			last = level.player.origin;
+			level.nacht_route[ level.nacht_route.size ] = last;
+		}
+		if( level.player usebuttonpressed() )
+			held += 0.1;
+		else
+			held = 0;
+		if( held >= 2 )
+			break;
+		wait 0.1;
+	}
+	level.nacht_second = level.player.origin;
+	level.nacht_route[ level.nacht_route.size ] = level.nacht_second;
+
+	// Keep at most 40 points: every other one until it fits.
+	while( level.nacht_route.size > 40 )
+	{
+		kept = [];
+		for( i = 0; i < level.nacht_route.size; i += 2 )
+			kept[ kept.size ] = level.nacht_route[i];
+		level.nacht_route = kept;
+	}
+	nacht_setup_save();
+	iprintlnbold( "Saved. Taking you back to " + nacht_place_name( 0 ) + "..." );
+	wait 2;
+}
+
+nacht_hold_use( text )
+{
+	held = 0;
+	shown = 0;
+	for( ;; )
+	{
+		if( gettime() > shown )
+		{
+			iprintlnbold( text );
 			shown = gettime() + 12000;
 		}
 		if( level.player usebuttonpressed() )
@@ -1516,25 +1623,141 @@ nacht_arena_autostart()
 		else
 			held = 0;
 		if( held >= 2 )
-		{
-			setdvar( "nacht_here", 1 );
 			return;
-		}
 		wait 0.1;
 	}
 }
 
-nacht_arena_start( center )
+nacht_setup_save()
 {
-	level endon( "nacht_end" );
-	level.nacht_mode = "arena";
-	level.nacht_anchor = center;
-	saved = int( center[0] ) + " " + int( center[1] ) + " " + int( center[2] );
-	executecommand( "seta " + level.nacht_arena_dvar + " \"" + saved + "\"" );
-	nacht_say( "Arena at " + saved + " (saved for next time)" );
-	nacht_zombies_start();
+	executecommand( "seta " + level.nacht_setup_dvar + " \"" + nacht_vec_text( level.nacht_start ) + "|" + nacht_vec_text( level.nacht_second ) + "\"" );
+	route = "";
+	for( i = 0; i < level.nacht_route.size; i++ )
+	{
+		executecommand( "seta " + level.nacht_route_dvar + i + " \"" + nacht_vec_text( level.nacht_route[i] ) + "\"" );
+		route += nacht_vec_text( level.nacht_route[i] ) + ";";
+	}
+	executecommand( "seta " + level.nacht_route_dvar + "n " + level.nacht_route.size );
+	print( "[nacht] SETUP " + getdvar( "mapname" ) + " start=" + nacht_vec_text( level.nacht_start ) + " second=" + nacht_vec_text( level.nacht_second ) + " route=" + route + "\n" );
 }
 
+// The indoor spots of both buildings: path nodes with a roof overhead,
+// grown outward from the two marked spots through open space (never through
+// a wall), so the neighbouring buildings aren't included.
+nacht_region_build()
+{
+	seeds = [];
+	seeds[0] = level.nacht_start;
+	seeds[1] = level.nacht_second;
+
+	cands = [];
+	checked = 0;
+	foreach( node in getallnodes() )
+	{
+		checked++;
+		if( checked % 150 == 0 )
+			wait 0.05;
+		near = false;
+		foreach( seed in seeds )
+		{
+			if( distance( node.origin, seed ) < 1500 )
+				near = true;
+		}
+		if( near && nacht_has_roof( node.origin ) )
+			cands[ cands.size ] = node.origin;
+	}
+
+	region = [];
+	done = [];
+	queue = [];
+	foreach( seed in seeds )
+	{
+		region[ region.size ] = seed;
+		best = undefined;
+		for( j = 0; j < cands.size; j++ )
+		{
+			if( distance( cands[j], seed ) < 250 && ( !isdefined( best ) || distance( cands[j], seed ) < distance( cands[best], seed ) ) )
+				best = j;
+		}
+		if( isdefined( best ) && !isdefined( done[ best ] ) )
+		{
+			done[ best ] = true;
+			queue[ queue.size ] = best;
+		}
+	}
+
+	head = 0;
+	traces = 0;
+	while( head < queue.size )
+	{
+		a = cands[ queue[ head ] ];
+		head++;
+		region[ region.size ] = a;
+		for( j = 0; j < cands.size; j++ )
+		{
+			if( isdefined( done[j] ) )
+				continue;
+			b = cands[j];
+			if( abs( a[2] - b[2] ) > 60 || distance( a, b ) > 220 )
+				continue;
+			traces++;
+			if( traces % 40 == 0 )
+				wait 0.05;
+			if( bullettracepassed( a + ( 0, 0, 40 ), b + ( 0, 0, 40 ), false, undefined ) )
+			{
+				done[j] = true;
+				queue[ queue.size ] = j;
+			}
+		}
+	}
+	level.nacht_region = region;
+	print( "[nacht] play area: " + region.size + " indoor spots in both buildings, " + level.nacht_route.size + " route points (" + cands.size + " roofed nodes nearby)\n" );
+}
+
+// Inside one of the two buildings, or on the route between them.
+nacht_player_allowed( pos )
+{
+	foreach( p in level.nacht_route )
+	{
+		if( distance2d( p, pos ) < 110 && abs( p[2] - pos[2] ) < 100 )
+			return true;
+	}
+	roofed = nacht_has_roof( pos );
+	foreach( p in level.nacht_region )
+	{
+		if( abs( p[2] - pos[2] ) > 90 )
+			continue;
+		d = distance2d( p, pos );
+		if( d < 72 || ( roofed && d < 200 ) )
+			return true;
+	}
+	return false;
+}
+
+// Walking out anywhere else puts you back where you just were.
+nacht_fence()
+{
+	level endon( "nacht_end" );
+	level.player endon( "death" );
+	last_ok = level.player.origin;
+	warned = 0;
+	for( ;; )
+	{
+		wait 0.1;
+		pos = level.player.origin;
+		if( nacht_player_allowed( pos ) )
+		{
+			last_ok = pos;
+			continue;
+		}
+		level.player setorigin( last_ok );
+		if( gettime() > warned )
+		{
+			iprintlnbold( "You can't leave " + nacht_place_name( 0 ) + " that way" );
+			warned = gettime() + 3000;
+		}
+	}
+}
 nacht_parse_vec( text )
 {
 	if( !isdefined( text ) || text == "" )
@@ -1593,12 +1816,14 @@ nacht_arena_setup()
 			if( nacht_has_roof( node.origin ) )
 				inside[ inside.size ] = node.origin;
 		}
-		else if( d > 900 && d < 2400 && level.nacht_spawn_spots.size < 120 )
+		else if( d > 700 && d < 2400 && level.nacht_spawn_spots.size < 400 )
 		{
 			if( !nacht_has_roof( node.origin ) )
 				level.nacht_spawn_spots[ level.nacht_spawn_spots.size ] = node.origin;
 		}
 	}
+	if( isdefined( level.nacht_region ) )
+		inside = level.nacht_region;
 	print( "[nacht] arena: " + checked + " path nodes, " + inside.size + " indoor spots, " + level.nacht_spawn_spots.size + " spawn spots\n" );
 	if( inside.size == 0 )
 		inside[0] = center;
@@ -1627,9 +1852,14 @@ nacht_arena_setup()
 		print( "[nacht] wall buy " + weapon + " at " + wall.origin + "\n" );
 	}
 
+	// The box goes in the start building, near (not on) the start spot.
 	box_at = center;
-	if( spots.size > 4 )
-		box_at = spots[4];
+	foreach( p in inside )
+	{
+		d = distance( p, center );
+		if( d > 120 && d < 600 && ( box_at == center || d < distance( box_at, center ) ) )
+			box_at = p;
+	}
 	nacht_buy( "box", box_at + ( 0, 0, 24 ), 950, 72 );
 	crate = nacht_find_model( "crate,box,case,chest" );
 	if( isdefined( crate ) )
