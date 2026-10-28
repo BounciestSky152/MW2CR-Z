@@ -21,8 +21,17 @@ local function getbest()
     return best
 end
 
+-- Back on the main menu, the campaign gets its loading videos again.
+if (Engine.InFrontend()) then
+    Engine.Exec("set cl_disableMapMovies 0; set cl_enableCustomLoadscreen 0")
+end
+
 local function play(build)
     Engine.Exec("set zm_build_mode " .. (build and "1" or "0"))
+    -- No Wolverines! loading video (or its sound): h2-mod's plain loading
+    -- screen instead, and the level starts by itself once loaded.
+    Engine.Exec("set cl_disableMapMovies 1; set cl_enableCustomLoadscreen 1")
+    Engine.Exec("set cl_loadscreenTitle \"MW2CR ZOMBIES\"; set cl_loadscreenDesc \"Nate's Sports Bar & Grill\"; set cl_loadscreenObj \"\"; set cl_loadscreenImage \"\"")
     -- Same form the game's own level select uses.
     pcall(function() LUI.FlowManager.PushMenuStackToDVar() end)
     if (Engine.StreamingInstallMap) then

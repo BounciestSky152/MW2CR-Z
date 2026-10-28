@@ -31,7 +31,8 @@ can't leave, and zombies come in endless rounds.
 - **Starting pistol:** MW2CR has no M1911 (it was never in MW2), so it's the USP .45 if the level has it,
   otherwise the M9, unless you pick another in the build menu.
 - **Power-ups:** Max Ammo, Double Points, Insta-Kill, Kaboom (kills every zombie) and Bonus Points.
-- **Quiet level:** the level's music, ambience, radio chatter, dialogue and battle chatter are switched off.
+- **No loading video:** the Wolverines! loading video and its sound are skipped (h2-mod's plain loading screen
+  shows instead) and the level starts by itself once loaded.
 - **Best round** is saved.
 
 The level's own soldiers, vehicles and loose weapons are removed. There are no perks.

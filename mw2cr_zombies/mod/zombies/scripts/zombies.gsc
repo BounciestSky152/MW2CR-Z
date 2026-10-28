@@ -1,7 +1,7 @@
 // MW2CR Zombies for Modern Warfare 2 Campaign Remastered (h2-mod).
 //
 // With the mod loaded, Wolverines! (level "invasion") is a zombies mode: the
-// level is emptied and silenced, you're put inside Nate's Sports Bar & Grill
+// level is emptied, you're put inside Nate's Sports Bar & Grill
 // and kept there, and zombies come in endless rounds. The MW2CR ZOMBIES button
 // on the campaign menu starts the level.
 //
@@ -57,7 +57,6 @@ zm_main()
 	wait 1;
 
 	zm_init();
-	level thread zm_mute_level();
 	zm_collect_weapons();
 	zm_find_spawners();
 	level thread zm_cleaner();
@@ -374,62 +373,6 @@ zm_move_to_nates()
 	zm_free_player();
 	level.player setorigin( level.zm_start );
 	level.player setplayerangles( ( 0, 90, 0 ) );
-	// Cut off whatever the intro was in the middle of saying.
-	level.player thread zm_stop_sounds();
-}
-
-// Its own thread: if the call isn't available only this thread stops.
-zm_stop_sounds()
-{
-	self stopsounds();
-}
-
-// ---------------------------------------------------------------------------
-// The level's own sound stays off: its music, ambience, radio chatter and
-// dialogue, and the soldiers' battle chatter. Guns and everything the mod
-// does still sound. Checked every second, each call in its own thread so one
-// the game won't take stops only itself.
-
-zm_mute_level()
-{
-	level endon( "zm_end" );
-	print( "[zombies] level music, ambience, dialogue and battle chatter off" );
-	for( ;; )
-	{
-		level thread zm_mute_music();
-		level thread zm_mute_ambience();
-		level thread zm_mute_dialogue();
-		level thread zm_mute_chatter();
-		wait 1;
-	}
-}
-
-zm_mute_music()
-{
-	musicstop( 0 );
-}
-
-zm_mute_ambience()
-{
-	ambientstop( 0 );
-}
-
-// The level looks its lines up in these; with them empty it has nothing to say.
-zm_mute_dialogue()
-{
-	level.scr_radio = [];
-	level.scr_sound = [];
-	if( isdefined( level.player_radio_emitter ) )
-		level.player_radio_emitter stopsounds();
-}
-
-zm_mute_chatter()
-{
-	if( !isdefined( level.battlechatter ) )
-		level.battlechatter = [];
-	level.battlechatter[ "axis" ] = false;
-	level.battlechatter[ "allies" ] = false;
-	level.battlechatter[ "neutral" ] = false;
 }
 
 zm_init()
@@ -609,8 +552,8 @@ zm_find_spawners()
 		print( "[zombies]   " + name + " x" + n );
 }
 
-// Keep the level empty. Enemy soldiers are removed; friendlies are hidden,
-// silenced and made harmless instead, because removing them can fail the
+// Keep the level empty. Enemy soldiers are removed; friendlies are hidden
+// and made harmless instead, because removing them can fail the
 // mission.
 zm_cleaner()
 {
@@ -622,10 +565,7 @@ zm_cleaner()
 			if( isdefined( ai.zm_zombie ) )
 				continue;
 			if( isdefined( ai.zm_parked ) )
-			{
-				ai thread zm_stop_sounds();
 				continue;
-			}
 			if( isdefined( ai.team ) && ai.team == "axis" )
 			{
 				ai delete();
@@ -634,7 +574,6 @@ zm_cleaner()
 			ai.zm_parked = true;
 			ai.ignoreall = true;
 			ai.ignoreme = true;
-			ai.battlechatter = false;
 			ai hide();
 			ai notsolid();
 		}
