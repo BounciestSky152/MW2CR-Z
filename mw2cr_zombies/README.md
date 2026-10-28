@@ -18,6 +18,9 @@ can't leave, and zombies come in endless rounds.
   - **PLACE A MYSTERY BOX:** pick a price, then aim at the floor or a table. It gives a random weapon; take it
     within 10 seconds. It shows as a crate from the level until the Blender model in `assets/mystery_box` can be
     loaded.
+  - **ADD PLAY AREA HERE:** the spot you stand on (about 5 meters around) becomes part of the play area, for
+    places the fence keeps you out of. In build mode you can walk anywhere until START ZOMBIES.
+  - **UNDO LAST:** takes back the last thing placed or added.
   - **MOVE SOMETHING / REMOVE SOMETHING:** aim at something you placed (it lights up), then Fire or Use.
   - **REMOVE EVERYTHING**, and in build mode **START ZOMBIES**.
 

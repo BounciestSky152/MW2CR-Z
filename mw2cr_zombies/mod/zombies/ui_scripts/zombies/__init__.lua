@@ -55,7 +55,8 @@ local howto = {
     { "WALL WEAPONS", "Aim at a wall to hang a weapon on it, or at a table or the floor to lay it there. Weapons for sale are outlined; buying one you already have refills its ammo for half price." },
     { "BARRIERS", "Aim through a doorway and the barrier spans it. Once the zombies are on, you can't get past a barrier until you buy it, and whatever is behind it opens up." },
     { "MYSTERY BOX", "Place one with the build menu. It gives a random weapon from the level; take it within 10 seconds." },
-    { "BUILD MODE", "Starts Nate's without zombies so you can place things in peace. Pick START ZOMBIES in the build menu when you're ready." },
+    { "BUILD MODE", "Starts Nate's without zombies so you can place things in peace, and you can walk anywhere. Pick START ZOMBIES in the build menu when you're ready." },
+    { "PLAY AREA", "Once the zombies are on you're kept inside Nate's. If it keeps you out of somewhere you want, stand there in build mode and pick ADD PLAY AREA HERE in the build menu." },
     { "STARTING PISTOL", "You start with the M9." },
     { "POWER-UPS", "Killed zombies sometimes drop one: Max Ammo, Double Points, Insta-Kill, Kaboom (kills every zombie) or Bonus Points." },
     { "ZOMBIES", "Walkers at first, faster runners from round 3, and tough brutes from round 6. Three hits and you're down; a brute's hit counts double. Four seconds without a hit and you've recovered." },
@@ -166,6 +167,12 @@ LUI.MenuBuilder.registerType("zm_build", function(a1)
     button(menu, "PLACE A MYSTERY BOX", "Pick its price, then aim at the floor or a table where it goes. It gives a random weapon; take it within 10 seconds. " .. placehelp, function()
         pending = { kind = "box", label = "Mystery Box" }
         LUI.FlowManager.RequestAddMenu(nil, "zm_build_price")
+    end)
+    button(menu, "ADD PLAY AREA HERE", "Once the zombies are on, you're kept inside Nate's. Stand somewhere it keeps you out of (the kitchen, a walkway, a corner) and pick this: about 5 meters around you becomes part of the play area. In build mode you can walk anywhere until you start the zombies.", function()
+        send(menu, "area")
+    end)
+    button(menu, "UNDO LAST", "Take back the last thing you placed or added.", function()
+        send(menu, "undo")
     end)
     button(menu, "MOVE SOMETHING", "Aim at something you placed and press Fire or Use to pick it up, then place it again.", function()
         send(menu, "move")

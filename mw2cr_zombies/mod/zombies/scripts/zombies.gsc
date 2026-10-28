@@ -63,6 +63,7 @@ zm_main()
 	wait 1;
 
 	zm_init();
+	level.zm_free_roam = getdvarint( "zm_build_mode" ) != 0;
 	zm_collect_weapons();
 	zm_find_spawners();
 	level thread zm_cleaner();
@@ -111,6 +112,7 @@ zm_update_rooms()
 	queue[0] = 0;
 	head = 0;
 	traces = 0;
+	checks = 0;
 	while( head < queue.size )
 	{
 		a = area[ queue[ head ] ];
@@ -120,6 +122,9 @@ zm_update_rooms()
 			if( isdefined( reached[j] ) )
 				continue;
 			b = area[j];
+			checks++;
+			if( checks % 300 == 0 )
+				wait 0.05;
 			if( abs( a[2] - b[2] ) > 60 || distance( a, b ) > 260 )
 				continue;
 			if( zm_near_barrier( gates, b, 32 ) || zm_crosses_barrier( gates, a, b ) )
@@ -439,6 +444,7 @@ zm_init()
 	level.zm_insta = false;
 	level.zm_rounds_on = false;
 	level.zm_placing = false;
+	level.zm_free_roam = false;
 	level.zm_box_busy = false;
 	level.zm_zombies = [];
 	level.zm_ents = [];
@@ -681,8 +687,10 @@ zm_find_nates_bounds()
 		lo = ( -100, -5070, 2290 );
 		hi = ( 660, -4280, 2520 );
 	}
-	level.zm_lo = lo - ( 24, 24, 64 );
-	level.zm_hi = hi + ( 24, 24, 64 );
+	// The pieces cover the dining room; the kitchen at the back (south) and
+	// the walkway on the right (east) are beyond them.
+	level.zm_lo = lo - ( 150, 450, 64 );
+	level.zm_hi = hi + ( 300, 150, 64 );
 	print( "[zombies] Nate's outline from " + pieces + " pieces: " + zm_vec_text( level.zm_lo ) + " to " + zm_vec_text( level.zm_hi ) );
 }
 
@@ -797,9 +805,11 @@ zm_build_area()
 // indoor spot, for doorways), and not behind a closed barrier.
 zm_inside( pos )
 {
-	if( !zm_in_nates_box( pos, 0 ) )
-		return false;
 	if( zm_in_closed_room( pos ) )
+		return false;
+	if( zm_in_play_area( pos ) )
+		return true;
+	if( !zm_in_nates_box( pos, 0 ) )
 		return false;
 	if( zm_has_roof( pos ) )
 		return true;
@@ -811,19 +821,43 @@ zm_inside( pos )
 	return false;
 }
 
+// Spots added with the build menu's ADD PLAY AREA HERE: anywhere within about
+// 5 meters of one is inside, roof or not.
+zm_in_play_area( pos )
+{
+	foreach( item in level.zm_items )
+	{
+		if( item.kind == "area" && abs( item.origin[2] - pos[2] ) < 120 && distance2d( item.origin, pos ) < 192 )
+			return true;
+	}
+	return false;
+}
+
+// Where things can be placed: Nate's outline or the play area you added.
+zm_placeable( pos )
+{
+	return zm_in_nates_box( pos, 24 ) || zm_in_play_area( pos );
+}
+
 // Walking out of Nate's (or past a closed barrier) puts you back where you
-// just were.
+// just were. Not in build mode until the zombies are started: you can walk
+// anywhere to build.
 zm_fence()
 {
 	level endon( "zm_end" );
 	level.player endon( "death" );
 	last_ok = level.zm_start;
 	// No warning while the level's intro is still trying to move you.
-	warned = gettime() + 30000;
+	warned = gettime() + 5000;
 	moved = 0;
 	for( ;; )
 	{
 		wait 0.1;
+		if( level.zm_free_roam )
+		{
+			last_ok = level.zm_start;
+			continue;
+		}
 		pos = level.player.origin;
 		if( !level.player islinked() && zm_inside( pos ) )
 		{
@@ -870,6 +904,7 @@ zm_game()
 	}
 	else if( level.zm_items.size == 0 )
 		iprintlnbold( "Nothing to buy yet: press Esc and pick BUILD MENU to place weapons and barriers" );
+	level.zm_free_roam = false;
 	level.zm_rounds_on = true;
 
 	if( level.zm_spawners.size == 0 )
@@ -968,7 +1003,7 @@ zm_spawn_spot()
 	for( i = 0; i < 12; i++ )
 	{
 		spot = level.zm_spawn_spots[ randomint( level.zm_spawn_spots.size ) ];
-		if( distance( spot, level.player.origin ) < 600 )
+		if( distance( spot, level.player.origin ) < 600 || zm_in_play_area( spot ) )
 			continue;
 		if( !sighttracepassed( eye, spot + ( 0, 0, 48 ), false, undefined ) )
 			return spot;
@@ -1459,6 +1494,10 @@ zm_build_listener()
 			level thread zm_place( zm_new_item( "box", undefined, int( args[1] ) ) );
 		else if( what == "barrier" && args.size >= 2 )
 			level thread zm_place( zm_new_item( "barrier", undefined, int( args[1] ) ) );
+		else if( what == "area" )
+			level thread zm_add_area();
+		else if( what == "undo" )
+			level thread zm_undo();
 		else if( what == "move" )
 			level thread zm_pick( true );
 		else if( what == "remove" )
@@ -1485,6 +1524,8 @@ zm_item_name( item )
 		return zm_weapon_name( item.weapon );
 	if( item.kind == "box" )
 		return "Mystery Box";
+	if( item.kind == "area" )
+		return "Play area spot";
 	return "Barrier";
 }
 
@@ -1558,6 +1599,12 @@ zm_parse_item( text )
 		item.angles = ( int( parts[6] ), int( parts[7] ), int( parts[8] ) );
 		return item;
 	}
+	if( parts.size >= 4 && parts[0] == "a" )
+	{
+		item = zm_new_item( "area", undefined, 0 );
+		item.origin = ( int( parts[1] ), int( parts[2] ), int( parts[3] ) );
+		return item;
+	}
 	if( parts.size >= 6 && parts[0] == "x" )
 	{
 		item = zm_new_item( "box", undefined, int( parts[1] ) );
@@ -1579,6 +1626,8 @@ zm_parse_item( text )
 
 zm_item_text( item )
 {
+	if( item.kind == "area" )
+		return "a " + zm_vec_text( item.origin );
 	if( item.kind == "weapon" )
 		return "w " + item.weapon + " " + item.cost + " " + zm_vec_text( item.origin ) + " " + zm_vec_text( item.angles );
 	if( item.kind == "box" )
@@ -1597,6 +1646,13 @@ zm_save_items()
 // Puts a placed thing in the level: its models, outlined, and where you buy it.
 zm_add_item( item )
 {
+	if( item.kind == "area" )
+	{
+		item.bought = false;
+		item.ents = [];
+		level.zm_items[ level.zm_items.size ] = item;
+		return;
+	}
 	if( !isdefined( item.ents ) )
 		zm_item_models( item );
 	zm_item_move( item );
@@ -1624,6 +1680,8 @@ zm_remove_item( item )
 			items[ items.size ] = other;
 	}
 	level.zm_items = items;
+	if( !isdefined( item.buy ) )
+		return;
 	buys = [];
 	foreach( b in level.zm_buys )
 	{
@@ -1700,9 +1758,12 @@ zm_barrier_model()
 		level.zm_barrier_prop_found = true;
 		level.zm_barrier_prop = zm_find_model( "chair,stool" );
 		if( !isdefined( level.zm_barrier_prop ) )
-			level.zm_barrier_prop = zm_find_model( "bench,table,crate,barrel,box,pallet,trash,cart,cone,barricade,sandbag" );
+			level.zm_barrier_prop = zm_find_model( "bench,table,crate,barrel,box,pallet,trash,cart,cone,barricade,sandbag,desk,cabinet,shelf,tire,bucket" );
 		if( !isdefined( level.zm_barrier_prop ) )
 			level.zm_barrier_prop = zm_find_model( "com_,furniture,me_" );
+		// Never a piece without a model: a gun the level has, at worst.
+		if( !isdefined( level.zm_barrier_prop ) )
+			level.zm_barrier_prop = getweaponmodel( "beretta" );
 		print( "[zombies] barrier look: " + zm_find_model_text( level.zm_barrier_prop ) );
 	}
 	return level.zm_barrier_prop;
@@ -1751,32 +1812,16 @@ zm_item_move( item )
 	item.end_a = item.origin + right * item.right;
 	item.end_b = item.origin - right * item.left;
 	across = item.end_a - item.end_b;
-	n = int( ( item.left + item.right ) / 30 ) + 1;
-	if( n < 2 )
-		n = 2;
-	if( n > 4 )
-		n = 4;
-	k = 0;
-	for( i = 0; i < n; i++ )
-	{
-		zm_piece( item.ents[k], item.end_b + across * ( ( i + 0.5 ) / n ), ( 0, item.yaw + 90 + ( i * 67 ) % 50 - 25, 0 ) );
-		k++;
-		if( i < n - 1 )
-		{
-			zm_piece( item.ents[k], item.end_b + across * ( ( i + 1.0 ) / n ) + ( 0, 0, 28 ), ( 0, item.yaw + 160 - i * 40, 75 ) );
-			k++;
-		}
-	}
-	while( k < item.ents.size )
-	{
-		item.ents[k] hide();
-		k++;
-	}
+	// Four chairs along the bottom, three tipped over on top; they bunch up
+	// in a narrow doorway. All always shown.
+	for( i = 0; i < 4; i++ )
+		zm_piece( item.ents[i], item.end_b + across * ( ( i + 0.5 ) / 4 ), ( 0, item.yaw + 90 + ( i * 67 ) % 50 - 25, 0 ) );
+	for( i = 0; i < 3; i++ )
+		zm_piece( item.ents[ 4 + i ], item.end_b + across * ( ( i + 1.0 ) / 4 ) + ( 0, 0, 28 ), ( 0, item.yaw + 160 - i * 40, 75 ) );
 }
 
 zm_piece( m, at, angles )
 {
-	m show();
 	m.origin = at;
 	m.angles = angles;
 }
@@ -1826,6 +1871,31 @@ zm_place( item )
 	zm_save_items();
 	zm_place_end();
 	iprintlnbold( name + " placed" );
+	zm_update_rooms();
+}
+
+// The play area grows to where you stand (about 5 meters around you).
+zm_add_area()
+{
+	item = zm_new_item( "area", undefined, 0 );
+	item.origin = level.player.origin;
+	zm_add_item( item );
+	zm_save_items();
+	iprintlnbold( "Play area added here" );
+}
+
+// Takes back the last thing placed or added.
+zm_undo()
+{
+	if( level.zm_items.size == 0 )
+	{
+		iprintlnbold( "Nothing to undo" );
+		return;
+	}
+	item = level.zm_items[ level.zm_items.size - 1 ];
+	zm_remove_item( item );
+	zm_save_items();
+	iprintlnbold( zm_item_name( item ) + " taken back" );
 	zm_update_rooms();
 }
 
@@ -1977,7 +2047,7 @@ zm_aim_item( item, turn )
 			item.origin = pos + normal * 2.5;
 			item.angles = ( turn, facing[1] + 90, 0 );
 		}
-		return zm_in_nates_box( item.origin, 24 );
+		return zm_placeable( item.origin );
 	}
 	ground = pos;
 	if( normal[2] < 0.7 )
@@ -1990,7 +2060,7 @@ zm_aim_item( item, turn )
 	{
 		item.yaw = view[1] + 90 + turn;
 		item.origin = ground;
-		return zm_in_nates_box( ground, 24 );
+		return zm_placeable( ground );
 	}
 	item.yaw = view[1] + turn;
 	right = anglestoright( ( 0, item.yaw, 0 ) );
@@ -2000,7 +2070,7 @@ zm_aim_item( item, turn )
 	item.right = r[ "fraction" ] * 96;
 	item.left = l[ "fraction" ] * 96;
 	item.origin = ground;
-	return zm_in_nates_box( ground, 24 );
+	return zm_placeable( ground );
 }
 
 // The placed thing nearest your line of sight (within 40 of it, 400 away).
@@ -2012,6 +2082,8 @@ zm_aimed_item()
 	best_d = 40;
 	foreach( item in level.zm_items )
 	{
+		if( !isdefined( item.buy ) )
+			continue;
 		at = item.buy.origin;
 		along = vectordot( at - eye, dir );
 		if( along < 0 || along > 400 )
@@ -2056,8 +2128,9 @@ zm_find_model( words )
 		if( !isdefined( m.model ) || m.model == "" )
 			continue;
 		lower = tolower( m.model );
-		// "box" would otherwise find the mailboxes.
-		if( issubstr( lower, "mail" ) )
+		// "box" would otherwise find the mailboxes; and no helpers, vehicles,
+		// people or effects.
+		if( issubstr( lower, "mail" ) || issubstr( lower, "tag_origin" ) || issubstr( lower, "vehicle" ) || issubstr( lower, "body" ) || issubstr( lower, "head" ) || issubstr( lower, "fx" ) )
 			continue;
 		foreach( w in list )
 		{
@@ -2151,11 +2224,8 @@ zm_use_buy( b )
 		if( !b.item.bought && zm_spend( b.cost ) )
 		{
 			b.item.bought = true;
-			foreach( m in b.item.ents )
-			{
-				if( isdefined( m ) )
-					m hide();
-			}
+			zm_item_delete( b.item );
+			b.item.ents = [];
 			iprintlnbold( "The way is clear" );
 			level thread zm_update_rooms();
 		}
