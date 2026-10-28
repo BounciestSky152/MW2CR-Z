@@ -604,10 +604,12 @@ zm_find_nates_bounds()
 	lo = undefined;
 	hi = undefined;
 	pieces = 0;
-	foreach( ent in getentarray() )
+	names = [];
+	foreach( ent in zm_nates_pieces() )
 	{
-		if( !isdefined( ent.targetname ) || !issubstr( ent.targetname, "nates_" ) || !issubstr( ent.targetname, "bombing" ) )
-			continue;
+		if( !isdefined( names[ ent.targetname ] ) )
+			names[ ent.targetname ] = 0;
+		names[ ent.targetname ]++;
 		a = ent getpointinbounds( -1, -1, -1 );
 		b = ent getpointinbounds( 1, 1, 1 );
 		if( !isdefined( lo ) )
@@ -619,7 +621,10 @@ zm_find_nates_bounds()
 		hi = ( zm_max( hi[0], b[0] ), zm_max( hi[1], b[1] ), zm_max( hi[2], b[2] ) );
 		pieces++;
 	}
-	if( !isdefined( lo ) )
+	foreach( name, n in names )
+		print( "[zombies]   Nate's piece '" + name + "' x" + n );
+	// Measured in-game: used if the pieces give nothing building-sized.
+	if( !isdefined( lo ) || hi[0] - lo[0] > 2000 || hi[1] - lo[1] > 2000 )
 	{
 		lo = ( -100, -5070, 2290 );
 		hi = ( 660, -4280, 2520 );
@@ -627,6 +632,22 @@ zm_find_nates_bounds()
 	level.zm_lo = lo - ( 24, 24, 64 );
 	level.zm_hi = hi + ( 24, 24, 64 );
 	print( "[zombies] Nate's outline from " + pieces + " pieces: " + zm_vec_text( level.zm_lo ) + " to " + zm_vec_text( level.zm_hi ) );
+}
+
+// The level's pieces of Nate's (named nates_..._bombing) that are actually at
+// Nate's: by where each one really is, since brush pieces may all report the
+// map's centre as their origin.
+zm_nates_pieces()
+{
+	pieces = [];
+	foreach( ent in getentarray() )
+	{
+		if( !isdefined( ent.targetname ) || !issubstr( ent.targetname, "nates_" ) || !issubstr( ent.targetname, "bombing" ) )
+			continue;
+		if( distance2d( ent getpointinbounds( 0, 0, 0 ), level.zm_start ) < 900 )
+			pieces[ pieces.size ] = ent;
+	}
+	return pieces;
 }
 
 // The level keeps Nate's in two versions, before and after it's bombed, and
@@ -637,10 +658,8 @@ zm_whole_nates()
 {
 	shown = 0;
 	hidden = 0;
-	foreach( ent in getentarray() )
+	foreach( ent in zm_nates_pieces() )
 	{
-		if( !isdefined( ent.targetname ) || !issubstr( ent.targetname, "nates_" ) )
-			continue;
 		if( issubstr( ent.targetname, "after" ) )
 		{
 			ent hide();
@@ -1607,7 +1626,7 @@ zm_box_model()
 	{
 		level.zm_box_prop_found = true;
 		if( !isdefined( level.zm_box_prop ) )
-			level.zm_box_prop = zm_find_model( "chest,crate,case,box" );
+			level.zm_box_prop = zm_find_model( "chest,crate,footlocker,case,ammo" );
 		if( !isdefined( level.zm_box_prop ) )
 			level.zm_box_prop = zm_barrier_model();
 		print( "[zombies] mystery box look: " + zm_find_model_text( level.zm_box_prop ) );
@@ -1980,6 +1999,9 @@ zm_find_model( words )
 		if( !isdefined( m.model ) || m.model == "" )
 			continue;
 		lower = tolower( m.model );
+		// "box" would otherwise find the mailboxes.
+		if( issubstr( lower, "mail" ) )
+			continue;
 		foreach( w in list )
 		{
 			if( issubstr( lower, w ) )
