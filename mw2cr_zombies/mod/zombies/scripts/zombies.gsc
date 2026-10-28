@@ -19,6 +19,7 @@ main()
 		return;
 	setdvarifuninitialized( "zm_off", 0 );
 	setdvarifuninitialized( "zm_best", 0 );
+	setdvarifuninitialized( "zm_layout", "" );
 	if( getdvarint( "zm_off" ) != 0 )
 		return;
 	precacheshader( "white" );
@@ -29,6 +30,13 @@ main()
 zm_baked_nates()
 {
 	return "435 -4744 2318";
+}
+
+// The FAL's table and the kitchen barrier: "x y z yaw|x y z yaw", from the
+// in-game set-up (printed as "[zombies] LAYOUT ..."). Empty until sent.
+zm_baked_layout()
+{
+	return "";
 }
 
 zm_main()
@@ -58,8 +66,278 @@ zm_main()
 	// The fence runs from here on; it also brings you back if the level's
 	// intro pulls you away (it can attach you to its opening scene).
 	level thread zm_fence();
+	zm_load_area_transients();
 	zm_build_area();
+	if( !zm_load_layout() )
+		zm_editor();
+	zm_split_rooms();
 	zm_game();
+}
+
+// ---------------------------------------------------------------------------
+// Layout: where the FAL lies on a dining table and where the kitchen barrier
+// stands. Set up once in game (two "look and hold Use" steps), saved in the
+// config as zm_layout.
+
+zm_load_layout()
+{
+	text = getdvar( "zm_layout" );
+	if( text == "" )
+		text = zm_baked_layout();
+	parts = strtok( text, "|" );
+	if( parts.size < 2 )
+		return false;
+	level.zm_fal_spot = zm_parse_spot( parts[0] );
+	level.zm_barrier = zm_parse_spot( parts[1] );
+	if( !isdefined( level.zm_fal_spot ) || !isdefined( level.zm_barrier ) )
+		return false;
+	print( "[zombies] layout: FAL table " + zm_spot_text( level.zm_fal_spot ) + ", kitchen barrier " + zm_spot_text( level.zm_barrier ) );
+	return true;
+}
+
+zm_parse_spot( text )
+{
+	parts = strtok( text, " " );
+	if( parts.size < 4 )
+		return undefined;
+	spot = spawnstruct();
+	spot.origin = ( int( parts[0] ), int( parts[1] ), int( parts[2] ) );
+	spot.yaw = int( parts[3] );
+	return spot;
+}
+
+zm_spot_text( spot )
+{
+	return zm_vec_text( spot.origin ) + " " + int( spot.yaw );
+}
+
+zm_editor()
+{
+	iprintlnbold( "Setting up Nate's: two quick steps" );
+	wait 3;
+	level.zm_fal_spot = zm_editor_pick( "Look at the dining table where the FAL should lie, then hold [Use]", true );
+	level.zm_barrier = zm_editor_pick( "Stand in the kitchen doorway facing the kitchen, then hold [Use]", false );
+	text = zm_spot_text( level.zm_fal_spot ) + "|" + zm_spot_text( level.zm_barrier );
+	executecommand( "seta zm_layout \"" + text + "\"" );
+	print( "[zombies] LAYOUT " + text );
+	iprintlnbold( "Nate's is set up - here they come!" );
+	wait 2;
+}
+
+// Waits for [Use] held 1.5 seconds; returns where you looked (or stood) and
+// which way you faced.
+zm_editor_pick( text, look )
+{
+	held = 0;
+	shown = 0;
+	for( ;; )
+	{
+		if( gettime() > shown )
+		{
+			iprintlnbold( text );
+			shown = gettime() + 10000;
+		}
+		if( level.player usebuttonpressed() )
+			held += 0.1;
+		else
+			held = 0;
+		if( held >= 1.5 )
+			break;
+		wait 0.1;
+	}
+	spot = spawnstruct();
+	angles = level.player getplayerangles();
+	spot.yaw = angles[1];
+	spot.origin = level.player.origin;
+	if( look )
+	{
+		eye = level.player geteye();
+		trace = bullettrace( eye, eye + anglestoforward( angles ) * 300, false, level.player );
+		spot.origin = trace[ "position" ];
+	}
+	iprintlnbold( "Got it" );
+	while( level.player usebuttonpressed() )
+		wait 0.05;
+	wait 1;
+	return spot;
+}
+
+// ---------------------------------------------------------------------------
+// Rooms: the dining area (where you start) and the kitchen behind the barrier
+
+// The dining area is every indoor spot you can reach from the start without
+// passing the barrier; the rest of Nate's is the kitchen.
+zm_split_rooms()
+{
+	level.zm_dining = level.zm_area;
+	level.zm_kitchen = [];
+	level.zm_kitchen_open = true;
+	if( !isdefined( level.zm_barrier ) )
+		return;
+	level.zm_kitchen_open = false;
+	gate = level.zm_barrier.origin;
+	area = level.zm_area;
+	reached = [];
+	reached[0] = true;
+	queue = [];
+	queue[0] = 0;
+	head = 0;
+	traces = 0;
+	while( head < queue.size )
+	{
+		a = area[ queue[ head ] ];
+		head++;
+		for( j = 0; j < area.size; j++ )
+		{
+			if( isdefined( reached[j] ) )
+				continue;
+			b = area[j];
+			if( abs( a[2] - b[2] ) > 60 || distance( a, b ) > 260 )
+				continue;
+			if( distance2d( b, gate ) < 48 || zm_seg_point_dist( a, b, gate ) < 56 )
+				continue;
+			traces++;
+			if( traces % 40 == 0 )
+				wait 0.05;
+			if( bullettracepassed( a + ( 0, 0, 40 ), b + ( 0, 0, 40 ), false, undefined ) )
+			{
+				reached[j] = true;
+				queue[ queue.size ] = j;
+			}
+		}
+	}
+	dining = [];
+	kitchen = [];
+	for( j = 0; j < area.size; j++ )
+	{
+		if( isdefined( reached[j] ) )
+			dining[ dining.size ] = area[j];
+		else
+			kitchen[ kitchen.size ] = area[j];
+	}
+	level.zm_dining = dining;
+	level.zm_kitchen = kitchen;
+	print( "[zombies] rooms: dining " + dining.size + " spots, kitchen " + kitchen.size + " spots" );
+	if( kitchen.size == 0 )
+		level.zm_kitchen_open = true;
+}
+
+// Distance (top-down) from point p to the segment a-b.
+zm_seg_point_dist( a, b, p )
+{
+	abx = b[0] - a[0];
+	aby = b[1] - a[1];
+	len2 = abx * abx + aby * aby;
+	t = 0;
+	if( len2 > 0 )
+		t = ( ( p[0] - a[0] ) * abx + ( p[1] - a[1] ) * aby ) / len2;
+	if( t < 0 )
+		t = 0;
+	if( t > 1 )
+		t = 1;
+	return distance2d( ( a[0] + abx * t, a[1] + aby * t, 0 ), ( p[0], p[1], 0 ) );
+}
+
+// In the kitchen: closer to a kitchen spot (that you can see) than to any
+// dining spot, or standing in the barrier's doorway.
+zm_in_kitchen( pos )
+{
+	if( level.zm_kitchen_open || level.zm_kitchen.size == 0 )
+		return false;
+	if( distance2d( pos, level.zm_barrier.origin ) < 36 )
+		return true;
+	near_d = 999999;
+	foreach( p in level.zm_dining )
+	{
+		d = distance( p, pos );
+		if( d < near_d )
+			near_d = d;
+	}
+	near_k = undefined;
+	near_k_d = 999999;
+	foreach( p in level.zm_kitchen )
+	{
+		d = distance( p, pos );
+		if( d < near_k_d )
+		{
+			near_k_d = d;
+			near_k = p;
+		}
+	}
+	if( near_k_d >= near_d )
+		return false;
+	return bullettracepassed( pos + ( 0, 0, 40 ), near_k + ( 0, 0, 40 ), false, level.player );
+}
+
+// The rooms you can be in right now.
+zm_open_area()
+{
+	if( level.zm_kitchen_open )
+		return level.zm_area;
+	return level.zm_dining;
+}
+
+// ---------------------------------------------------------------------------
+// The level streams its areas in and out. Its triggers name the streamed
+// zone for each area (script_transient); load the one nearest Nate's so the
+// street outside is there too.
+zm_load_area_transients()
+{
+	best = undefined;
+	best_d = 0;
+	listed = 0;
+	foreach( ent in getentarray() )
+	{
+		if( !isdefined( ent.script_transient ) )
+			continue;
+		d = distance( ent.origin, level.zm_start );
+		if( listed < 30 )
+			print( "[zombies] streamed zone '" + ent.script_transient + "' trigger at " + zm_vec_text( ent.origin ) + " (" + int( d ) + " from Nate's)" );
+		listed++;
+		if( !isdefined( best ) || d < best_d )
+		{
+			best = ent;
+			best_d = d;
+		}
+	}
+	if( !isdefined( best ) )
+	{
+		print( "[zombies] no streamed-zone triggers found" );
+		return;
+	}
+	foreach( name in strtok( best.script_transient, " ," ) )
+		level thread zm_load_transient( name );
+}
+
+// Its own thread: an unknown zone only stops this thread.
+zm_load_transient( name )
+{
+	print( "[zombies] loading streamed zone " + name );
+	loadtransient( name );
+	wait 5;
+	print( "[zombies] streamed zone " + name + " loaded: " + istransientloaded( name ) );
+}
+
+// ---------------------------------------------------------------------------
+// Weapons that may or may not be in this level: check by name, in a thread of
+// its own so an unknown name can't stop anything else.
+zm_find_weapon( names )
+{
+	foreach( name in names )
+	{
+		level.zm_found_weapon = undefined;
+		level thread zm_check_weapon( name );
+		wait 0.05;
+		if( isdefined( level.zm_found_weapon ) )
+			return level.zm_found_weapon;
+	}
+	return undefined;
+}
+
+zm_check_weapon( name )
+{
+	if( assetexists( "weapon", name ) )
+		level.zm_found_weapon = name;
 }
 
 // Its own thread: if the call isn't available only this thread stops.
@@ -313,7 +591,6 @@ zm_build_area()
 		checked++;
 		if( checked % 150 == 0 )
 			wait 0.05;
-		d = distance( node.origin, center );
 		roofed = zm_has_roof( node.origin );
 		if( zm_in_nates_box( node.origin, 0 ) && roofed )
 			cands[ cands.size ] = node.origin;
@@ -370,6 +647,8 @@ zm_build_area()
 zm_inside( pos )
 {
 	if( !zm_in_nates_box( pos, 0 ) )
+		return false;
+	if( isdefined( level.zm_kitchen ) && zm_in_kitchen( pos ) )
 		return false;
 	if( zm_has_roof( pos ) )
 		return true;
@@ -673,12 +952,13 @@ zm_zombie_chase()
 	tick = 0;
 	for( ;; )
 	{
-		wait 0.5;
+		wait 0.25;
 		tick++;
-		// The level's own spawn scripts may hand a fresh soldier a scripted
-		// path; keep pointing it at the player.
+		// Like real zombies, always heading for you: re-aimed four times a
+		// second when you move, and every second regardless (the level's own
+		// spawn scripts may hand a fresh soldier a scripted path).
 		self.ignoreall = true;
-		if( tick % 2 == 0 || distance( goal, level.player.origin ) > 48 )
+		if( tick % 4 == 0 || distance( goal, level.player.origin ) > 24 )
 		{
 			goal = level.player.origin;
 			self setgoalpos( goal );
@@ -691,7 +971,7 @@ zm_zombie_chase()
 			stalled = 0;
 			continue;
 		}
-		stalled += 0.5;
+		stalled += 0.25;
 		if( stalled >= 6 )
 		{
 			// No way in (the level may keep Nate's doors shut): it climbs in
@@ -708,13 +988,14 @@ zm_zombie_chase()
 // An indoor spot in Nate's away from the player and out of their sight.
 zm_inside_spot()
 {
-	if( level.zm_area.size == 0 )
+	open = zm_open_area();
+	if( open.size == 0 )
 		return undefined;
 	eye = level.player.origin + ( 0, 0, 60 );
-	far = level.zm_area[0];
+	far = open[0];
 	for( i = 0; i < 16; i++ )
 	{
-		p = level.zm_area[ randomint( level.zm_area.size ) ];
+		p = open[ randomint( open.size ) ];
 		if( distance( p, level.player.origin ) > distance( far, level.player.origin ) )
 			far = p;
 		if( distance( p, level.player.origin ) < 250 )
@@ -870,11 +1151,20 @@ zm_player_death_watch()
 
 zm_setup_player()
 {
-	pistol = undefined;
-	foreach( w in level.zm_pool )
+	// The M1911 if this level has one (MW2CR doesn't seem to); otherwise the
+	// level's own pistol.
+	pistol = zm_find_weapon( strtok( "colt45 m1911 m1911_zm colt1911 colt45_zm", " " ) );
+	if( isdefined( pistol ) )
+		print( "[zombies] starting pistol: M1911 (" + pistol + ")" );
+	else
 	{
-		if( weaponclass( w ) == "pistol" )
-			pistol = w;
+		foreach( w in level.zm_pool )
+		{
+			if( weaponclass( w ) == "pistol" )
+				pistol = w;
+		}
+		if( isdefined( pistol ) )
+			print( "[zombies] no M1911 in this level; starting pistol: " + zm_weapon_name( pistol ) );
 	}
 	level.zm_starter = pistol;
 	if( isdefined( pistol ) )
@@ -892,7 +1182,6 @@ zm_setup_player()
 	}
 	level.player setnormalhealth( 1 );
 }
-
 zm_add_points( amount )
 {
 	if( level.zm_double )
@@ -985,41 +1274,46 @@ zm_perk_cost( perk )
 }
 zm_place_buys()
 {
-	center = level.zm_start;
-	spots = zm_spread( level.zm_area, 6 );
-	slot = 0;
-
-	// Four wall weapons.
-	classes = strtok( "rifle,sniper|rifle,smg|smg,mg|spread,smg", "|" );
-	costs = strtok( "200|600|1200|1200", "|" );
+	dining = level.zm_dining;
+	kitchen = level.zm_kitchen;
+	if( kitchen.size == 0 )
+		kitchen = dining;
 	used = [];
-	for( i = 0; i < 4; i++ )
+
+	// The FAL, lying on the dining table (1250).
+	fal = zm_find_weapon( strtok( "fal fal_acog fal_reflex fal_eotech fal_shotgun fal_grenadier fal_heartbeat fal_silencer fal_scope", " " ) );
+	if( !isdefined( fal ) )
 	{
-		weapon = zm_pick_weapon( strtok( classes[i], "," ), used );
-		if( !isdefined( weapon ) )
-			continue;
-		used[ weapon ] = true;
-		wall = zm_wall_spot( zm_spot( spots, slot ) );
-		slot++;
-		b = zm_buy( "weapon", wall.origin, int( costs[i] ) );
-		b.weapon = weapon;
-		model = getweaponmodel( weapon );
-		if( isdefined( model ) && model != "" )
+		fal = zm_pick_weapon( strtok( "rifle", "," ), used );
+		if( isdefined( fal ) )
+			print( "[zombies] no FAL in this level; the table has the " + zm_weapon_name( fal ) + " instead" );
+	}
+	if( isdefined( fal ) )
+	{
+		used[ fal ] = true;
+		if( isdefined( level.zm_fal_spot ) )
 		{
-			m = zm_extra( spawn( "script_model", wall.origin ) );
-			m setmodel( model );
-			m.angles = ( 0, wall.yaw + 90, 0 );
-			m thread zm_outline( 5 );
+			at = level.zm_fal_spot.origin + ( 0, 0, 2 );
+			angles = ( 0, level.zm_fal_spot.yaw + 90, 90 );
 		}
-		print( "[zombies] wall weapon " + zm_weapon_name( weapon ) + " (" + weapon + ") at " + zm_vec_text( wall.origin ) );
+		else
+		{
+			wall = zm_wall_spot( zm_spot( zm_spread( dining, 2 ), 1 ) );
+			at = wall.origin;
+			angles = ( 0, wall.yaw + 90, 0 );
+		}
+		b = zm_buy( "weapon", at + ( 0, 0, 8 ), 1250 );
+		b.weapon = fal;
+		zm_weapon_display( fal, at, angles );
+		print( "[zombies] FAL table weapon " + zm_weapon_name( fal ) + " (" + fal + ") at " + zm_vec_text( at ) );
 	}
 
-	// Perks, shown with a machine-like prop from the level when there is one.
+	// Quick Revive in the dining area.
 	machine = zm_find_model( "vending,soda,machine,cooler,fridge,arcade" );
+	dining_spots = zm_spread( dining, 3 );
 	foreach( perk in zm_perk_list() )
 	{
-		wall = zm_wall_spot( zm_spot( spots, slot ) );
-		slot++;
+		wall = zm_wall_spot( zm_spot( dining_spots, 2 ) );
 		b = zm_buy( "perk", wall.origin, zm_perk_cost( perk ) );
 		b.perk = perk;
 		if( isdefined( machine ) )
@@ -1031,8 +1325,27 @@ zm_place_buys()
 		print( "[zombies] perk " + zm_perk_name( perk ) + " at " + zm_vec_text( wall.origin ) );
 	}
 
-	// Ammo crate.
+	// The kitchen: three wall weapons, the ammo crate and the mystery box.
+	spots = zm_spread( kitchen, 5 );
+	slot = 0;
+	classes = strtok( "rifle,sniper|smg,mg,rifle|mg,spread,rifle", "|" );
+	costs = strtok( "1000|1200|1500", "|" );
+	for( i = 0; i < 3; i++ )
+	{
+		weapon = zm_pick_weapon( strtok( classes[i], "," ), used );
+		if( !isdefined( weapon ) )
+			continue;
+		used[ weapon ] = true;
+		wall = zm_wall_spot( zm_spot( spots, slot ) );
+		slot++;
+		b = zm_buy( "weapon", wall.origin, int( costs[i] ) );
+		b.weapon = weapon;
+		zm_weapon_display( weapon, wall.origin, ( 0, wall.yaw + 90, 0 ) );
+		print( "[zombies] wall weapon " + zm_weapon_name( weapon ) + " (" + weapon + ") at " + zm_vec_text( wall.origin ) );
+	}
+
 	wall = zm_wall_spot( zm_spot( spots, slot ) );
+	slot++;
 	zm_buy( "ammo", wall.origin, 1000 );
 	crate = zm_find_model( "ammo,crate,case" );
 	if( isdefined( crate ) )
@@ -1042,14 +1355,7 @@ zm_place_buys()
 	}
 	print( "[zombies] ammo crate at " + zm_vec_text( wall.origin ) );
 
-	// Mystery box near (not on) the start spot.
-	box_at = center;
-	foreach( p in level.zm_area )
-	{
-		d = distance( p, center );
-		if( d > 120 && d < 600 && ( box_at == center || d < distance( box_at, center ) ) )
-			box_at = p;
-	}
+	box_at = zm_spot( spots, slot );
 	zm_buy( "box", box_at + ( 0, 0, 24 ), 950 );
 	box = zm_find_model( "crate,box,case,chest" );
 	if( isdefined( box ) )
@@ -1058,8 +1364,57 @@ zm_place_buys()
 		m setmodel( box );
 	}
 	print( "[zombies] mystery box at " + zm_vec_text( box_at ) );
+
+	zm_build_barrier();
 }
 
+zm_weapon_display( weapon, at, angles )
+{
+	model = getweaponmodel( weapon );
+	if( !isdefined( model ) || model == "" )
+		return;
+	m = zm_extra( spawn( "script_model", at ) );
+	m setmodel( model );
+	m.angles = angles;
+	m thread zm_outline( 5 );
+}
+
+// The kitchen barrier (3000): chairs from the level piled in the doorway.
+zm_build_barrier()
+{
+	level.zm_barrier_ents = [];
+	if( level.zm_kitchen_open || !isdefined( level.zm_barrier ) )
+		return;
+	gate = level.zm_barrier;
+	model = zm_find_model( "chair,stool" );
+	if( !isdefined( model ) )
+		model = zm_find_model( "table,crate,barrel,box" );
+	// Across the doorway: perpendicular to the way you faced into the kitchen.
+	across = ( sin( gate.yaw ), 0 - cos( gate.yaw ), 0 );
+	if( isdefined( model ) )
+	{
+		pieces = strtok( "-26 0 0 10|0 0 0 -15|26 0 0 25|-12 30 90 5|14 28 0 160", "|" );
+		foreach( piece in pieces )
+		{
+			v = strtok( piece, " " );
+			at = gate.origin + across * int( v[0] ) + ( 0, 0, int( v[1] ) );
+			m = zm_extra( spawn( "script_model", at ) );
+			m setmodel( model );
+			m.angles = ( 0, gate.yaw + int( v[3] ), int( v[2] ) );
+			m thread zm_outline( 1 );
+			level.zm_barrier_ents[ level.zm_barrier_ents.size ] = m;
+		}
+	}
+	zm_buy( "barrier", gate.origin + ( 0, 0, 40 ), 3000 );
+	print( "[zombies] kitchen barrier (" + zm_find_model_text( model ) + ") at " + zm_vec_text( gate.origin ) );
+}
+
+zm_find_model_text( model )
+{
+	if( !isdefined( model ) )
+		return "no prop found";
+	return model;
+}
 // Its own thread: if outlines aren't available only this thread stops.
 zm_outline( color )
 {
@@ -1229,6 +1584,12 @@ zm_nearest_buy()
 
 zm_buy_text( b )
 {
+	if( b.kind == "barrier" )
+	{
+		if( level.zm_kitchen_open )
+			return "";
+		return "Press [Use] to clear the way to the kitchen [" + b.cost + "]";
+	}
 	if( b.kind == "perk" )
 	{
 		if( isdefined( level.zm_perks[ b.perk ] ) )
@@ -1252,6 +1613,20 @@ zm_buy_text( b )
 
 zm_use_buy( b )
 {
+	if( b.kind == "barrier" )
+	{
+		if( !level.zm_kitchen_open && zm_spend( b.cost ) )
+		{
+			level.zm_kitchen_open = true;
+			foreach( m in level.zm_barrier_ents )
+			{
+				if( isdefined( m ) )
+					m delete();
+			}
+			iprintlnbold( "The kitchen is open" );
+		}
+		return;
+	}
 	if( b.kind == "perk" )
 	{
 		if( !isdefined( level.zm_perks[ b.perk ] ) && zm_spend( b.cost ) )

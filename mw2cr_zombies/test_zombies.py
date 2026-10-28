@@ -10,8 +10,10 @@ ROOT = Path(__file__).resolve().parent
 MOD = ROOT / "mod" / "zombies"
 
 # H2 (MW2CR) builtins the script uses, checked against gsc-tool's h2 tables
-# (h2_func.cpp / h2_meth.cpp) and h2-mod's extensions (print, executecommand).
+# (h2_func.cpp / h2_meth.cpp) and h2-mod's extensions (print, executecommand,
+# assetexists).
 H2_FUNCTIONS = {
+    "assetexists", "cos", "istransientloaded", "loadtransient", "sin",
     "abs", "anglestoforward", "bullettrace", "bullettracepassed", "distance", "distance2d", "earthquake",
     "executecommand", "getaiarray", "getallnodes", "getdvar", "getdvarint", "getentarray", "getspawnerarray",
     "getsubstr", "gettime", "getweaponmodel", "int", "iprintln", "iprintlnbold", "isalive", "issubstr",
@@ -20,7 +22,7 @@ H2_FUNCTIONS = {
 }
 H2_METHODS = {
     "enablehealthshield", "hidepart", "hudoutlineenable", "kill", "playerclearstreamorigin", "playersetstreamorigin",
-    "setgoalpos", "setplayerangles",
+    "setgoalpos", "setplayerangles", "geteye", "getplayerangles",
     "getpointinbounds",
     "delete", "disableinvulnerability", "dodamage", "enableinvulnerability", "enableweapons", "fadeovertime",
     "forceteleport", "freezecontrols", "getcurrentweapon", "getweaponslistall", "getweaponslistoffhands",
