@@ -23,7 +23,7 @@ H2_FUNCTIONS = {
 }
 H2_METHODS = {
     "adsbuttonpressed", "allowedstances", "attach", "attackbuttonpressed", "disableweapons", "meleebuttonpressed",
-    "show", "stopsounds",
+    "show", "solid", "stopsounds",
     "enablehealthshield", "hidepart", "hudoutlineenable", "kill", "playerclearstreamorigin", "playersetstreamorigin",
     "setgoalpos", "setplayerangles", "geteye", "getplayerangles",
     "getpointinbounds",

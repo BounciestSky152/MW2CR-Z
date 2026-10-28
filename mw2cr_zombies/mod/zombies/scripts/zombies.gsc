@@ -79,6 +79,7 @@ zm_main()
 	zm_move_to_nates();
 	zm_say( "Nate's Sports Bar & Grill at " + zm_vec_text( level.zm_start ) );
 	zm_find_nates_bounds();
+	level thread zm_whole_nates();
 	level.zm_area = [];
 	level.zm_area[0] = level.zm_start;
 	// The fence runs from here on; it also brings you back if the level's
@@ -626,6 +627,34 @@ zm_find_nates_bounds()
 	level.zm_lo = lo - ( 24, 24, 64 );
 	level.zm_hi = hi + ( 24, 24, 64 );
 	print( "[zombies] Nate's outline from " + pieces + " pieces: " + zm_vec_text( level.zm_lo ) + " to " + zm_vec_text( level.zm_hi ) );
+}
+
+// The level keeps Nate's in two versions, before and after it's bombed, and
+// shows parts of the "before" one only as the mission reaches them. Show all
+// of it and keep the bombed one away. Its own thread: a piece the game won't
+// take only stops this thread.
+zm_whole_nates()
+{
+	shown = 0;
+	hidden = 0;
+	foreach( ent in getentarray() )
+	{
+		if( !isdefined( ent.targetname ) || !issubstr( ent.targetname, "nates_" ) )
+			continue;
+		if( issubstr( ent.targetname, "after" ) )
+		{
+			ent hide();
+			ent notsolid();
+			hidden++;
+		}
+		else if( issubstr( ent.targetname, "before" ) )
+		{
+			ent show();
+			ent solid();
+			shown++;
+		}
+	}
+	print( "[zombies] Nate's: " + shown + " pieces shown, " + hidden + " bombed pieces hidden" );
 }
 
 zm_min( a, b )
