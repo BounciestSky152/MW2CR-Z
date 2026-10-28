@@ -23,12 +23,12 @@ end
 local howto = {
     { "THE GOAL", "Survive as many rounds as you can inside Nate's Sports Bar & Grill. Every round brings more, tougher zombies. You can't leave Nate's." },
     { "POINTS", "You start with 500. +10 per hit, +60 per kill, +100 for a headshot kill, +130 for a knife kill." },
+    { "STARTING PISTOL", "You start with the level's pistol, tuned to hit half again as hard as normal." },
     { "WALL WEAPONS", "Four weapons hang on Nate's walls for 200, 600, 1200 and 1200 points. Buying one you already have refills its ammo for half price." },
-    { "PERKS", "Juggernog (2500): 2.5x health. Stamin-Up (2000): move faster. Double Tap (2000): more damage. Quick Revive (1500): survive one killing hit." },
+    { "QUICK REVIVE", "Quick Revive (1500): the hit that would take you down revives you instead, once per purchase." },
     { "AMMO CRATE AND MYSTERY BOX", "The ammo crate (1000) refills every weapon and your grenades. The mystery box (950) gives a random weapon; take it within 10 seconds." },
     { "POWER-UPS", "Killed zombies sometimes drop one: Max Ammo, Double Points, Insta-Kill, Kaboom (kills every zombie) or Bonus Points." },
-    { "ZOMBIES", "Walkers at first, faster runners from round 3, and tough, hard-hitting brutes from round 6. They only hurt you up close." },
-    { "FIRST GAME", "The first time, walk into Nate's and hold Use for 2 seconds where you want to start. After that you always start there." },
+    { "ZOMBIES", "Walkers at first, faster runners from round 3, and tough brutes from round 6. Three hits and you're down; a brute's hit counts double. Four seconds without a hit and you've recovered." },
 }
 
 local function newmenu(a1, title)
@@ -72,13 +72,7 @@ LUI.MenuBuilder.registerType("zm_menu", function(a1)
     menu:AddButton(string.el("HOW TO PLAY"), function()
         LUI.FlowManager.RequestAddMenu(nil, "zm_howto")
     end, nil, true, nil, {
-        desc_text = string.el("Points, wall weapons, perks, the mystery box, power-ups and zombie types.")
-    })
-
-    menu:AddButton(string.el("RESET START SPOT"), function()
-        Engine.Exec("seta zm_nates \"\"")
-    end, nil, true, nil, {
-        desc_text = string.el("Next game, walk into Nate's and pick your start spot again.")
+        desc_text = string.el("Points, wall weapons, Quick Revive, the mystery box, power-ups and zombie types.")
     })
 
     return finishmenu(menu)

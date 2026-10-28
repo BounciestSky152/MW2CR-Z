@@ -6,18 +6,21 @@ can't leave, and zombies come in endless rounds.
 
 ## What's in it
 
-- **Main menu:** a ZOMBIES button on the campaign menu with PLAY (shows your best round), HOW TO PLAY and
-  RESET START SPOT.
+- **Main menu:** a ZOMBIES button on the campaign menu with PLAY (shows your best round) and HOW TO PLAY.
 - **Rounds:** endless, more and tougher zombies each round, a short break between rounds.
-- **Zombies:** walkers, faster runners from round 3, and tough brutes that hit harder from round 6. They spawn
-  out of sight outside and come in through Nate's real doors.
+- **Zombies:** the level's Russian soldiers, walking (runners run) straight at you without ducking, taking
+  cover or shooting, guns hidden. Walkers first, runners from round 3, tough brutes from round 6. They spawn
+  out of sight outside Nate's and come in through the doors; if they can't find a way in, they climb in
+  somewhere you aren't looking.
+- **Getting hit:** three hits and you're down (a brute's hit counts double); four seconds without a hit and
+  you've recovered. Each hit jolts you, shakes the screen and flashes it red.
 - **Points:** 500 to start, +10 per hit, +60 per kill, +100 headshot kill, +130 knife kill.
-- **Wall weapons:** four guns hung on Nate's walls (200 / 600 / 1200 / 1200; half price for ammo).
-- **Perks:** Juggernog (2500, 2.5x health), Stamin-Up (2000, faster movement), Double Tap (2000, more damage),
-  Quick Revive (1500, survive one killing hit).
+- **Starting pistol:** the level's pistol (the M9 on Wolverines!), hitting half again as hard as normal.
+- **Wall weapons:** four guns hung on Nate's walls with an outline (200 / 600 / 1200 / 1200; half price for
+  ammo).
+- **Quick Revive** (1500): the hit that would take you down revives you instead, once per purchase.
 - **Ammo crate** (1000, refills everything including grenades) and **mystery box** (950).
 - **Power-ups:** Max Ammo, Double Points, Insta-Kill, Kaboom (kills every zombie) and Bonus Points.
-- **Getting hit:** a jolt, screen shake and a red flash.
 - **Best round** is saved.
 
 The level's own soldiers and vehicles are removed. MW2CR has no zombie models, so the zombies are the level's
@@ -33,15 +36,13 @@ Wolverines! has loaded.
 3. Start `h2-mod.exe`, open **Mods**, load **Wolverines! Zombies** (the game restarts).
 4. **ZOMBIES → PLAY.**
 
-The very first game, the mod doesn't know where Nate's is yet: walk into Nate's and hold **Use** for 2
-seconds where you want to start. From then on you start there. No console commands are needed.
+The level starts you inside Nate's automatically. No console commands are needed.
 
 ## If something's wrong
 
 Everything the mod does is printed to the console (`~`) with `[zombies]` in front: the weapons and spawners it
-found, how big Nate's came out, where each wall weapon, perk, the ammo crate and the box went. Send those
-lines with what you saw. The first game also prints `[zombies] NATES x y z`: send that line and it can be
-built into the mod so the walk-in step goes away for everyone.
+found, Nate's outline and how many indoor spots it has, where each wall weapon, perk, the ammo crate and the
+box went. Send those lines with what you saw.
 
 ## Files
 

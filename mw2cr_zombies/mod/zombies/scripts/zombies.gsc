@@ -5,10 +5,9 @@
 // there, and zombies come in endless rounds. The ZOMBIES button on the
 // campaign menu starts the level.
 //
-// The first time, Nate's isn't known yet: walk into it and hold [Use] for 2
-// seconds where you want to start. That spot is saved in your config
-// (zm_nates) and printed to the console as "[zombies] NATES x y z"; put it in
-// zm_baked_nates() below and nobody has to do that step again.
+// Nate's outline comes from the level's own Nate's pieces (the walls and
+// windows named nates_before_bombing / nates_after_bombing), so the fence,
+// the indoor spots and everything you can buy stay inside the building.
 //
 // MW2CR has no zombie models, so the zombies are the level's own soldiers,
 // told to ignore everything and rush you; they only hurt you up close.
@@ -19,7 +18,6 @@ main()
 	if( getdvar( "mapname" ) != "invasion" )
 		return;
 	setdvarifuninitialized( "zm_off", 0 );
-	setdvarifuninitialized( "zm_nates", "" );
 	setdvarifuninitialized( "zm_best", 0 );
 	if( getdvarint( "zm_off" ) != 0 )
 		return;
@@ -27,10 +25,10 @@ main()
 	level thread zm_main();
 }
 
-// Nate's start spot, "x y z". Empty until someone sends the NATES line.
+// Where you start inside Nate's Sports Bar & Grill (found in-game).
 zm_baked_nates()
 {
-	return "";
+	return "435 -4744 2318";
 }
 
 zm_main()
@@ -46,16 +44,26 @@ zm_main()
 	zm_free_player();
 
 	level.zm_start = zm_parse_vec( zm_baked_nates() );
-	if( !isdefined( level.zm_start ) )
-		level.zm_start = zm_parse_vec( getdvar( "zm_nates" ) );
-	if( !isdefined( level.zm_start ) )
-		zm_first_time_setup();
 
+	// The level streams its world in around the player; have it load Nate's
+	// before moving you there, so nothing is missing when you arrive.
+	level.player thread zm_stream_nates();
+	iprintlnbold( "Loading Nate's Sports Bar & Grill..." );
+	wait 3;
 	level.player setorigin( level.zm_start );
 	zm_say( "Nate's Sports Bar & Grill at " + zm_vec_text( level.zm_start ) );
+	zm_find_nates_bounds();
 	zm_build_area();
 	level thread zm_fence();
 	zm_game();
+}
+
+// Its own thread: if the call isn't available only this thread stops.
+zm_stream_nates()
+{
+	self playersetstreamorigin( level.zm_start );
+	wait 6;
+	self playerclearstreamorigin();
 }
 
 zm_init()
@@ -74,11 +82,14 @@ zm_init()
 	level.zm_area = [];
 	level.zm_box_busy = false;
 	level.zm_spawn_failures = 0;
+	level.zm_spawned_total = 0;
+	level.zm_hits = 0;
+	level.zm_last_hit = 0;
 }
 
 zm_say( text )
 {
-	print( "[zombies] " + text + "\n" );
+	print( "[zombies] " + text );
 	iprintln( text );
 }
 
@@ -112,52 +123,6 @@ zm_free_player()
 	level.player enableweapons();
 }
 
-zm_first_time_setup()
-{
-	zm_list_named( "nate" );
-	held = 0;
-	shown = 0;
-	for( ;; )
-	{
-		if( gettime() > shown )
-		{
-			iprintlnbold( "First time only: walk into Nate's Sports Bar & Grill and hold [Use] for 2 seconds where you want to start" );
-			shown = gettime() + 12000;
-		}
-		if( level.player usebuttonpressed() )
-			held += 0.1;
-		else
-			held = 0;
-		if( held >= 2 )
-			break;
-		wait 0.1;
-	}
-	level.zm_start = level.player.origin;
-	executecommand( "seta zm_nates \"" + zm_vec_text( level.zm_start ) + "\"" );
-	print( "[zombies] NATES " + zm_vec_text( level.zm_start ) + "\n" );
-	iprintlnbold( "Saved - next time you start here" );
-	wait 2;
-}
-
-// Console clues for finding Nate's automatically later.
-zm_list_named( word )
-{
-	shown = 0;
-	foreach( ent in getentarray() )
-	{
-		name = "";
-		if( isdefined( ent.targetname ) )
-			name = ent.targetname;
-		if( isdefined( ent.script_noteworthy ) )
-			name = name + " / " + ent.script_noteworthy;
-		if( shown < 20 && issubstr( tolower( name ), word ) )
-		{
-			print( "[zombies] named: " + ent.classname + " " + name + " at " + zm_vec_text( ent.origin ) + "\n" );
-			shown++;
-		}
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Emptying the level
 
@@ -177,9 +142,9 @@ zm_collect_weapons()
 		if( isdefined( ent.classname ) && issubstr( ent.classname, "weapon_" ) && getsubstr( ent.classname, 0, 7 ) == "weapon_" )
 			zm_pool_add( getsubstr( ent.classname, 7 ) );
 	}
-	print( "[zombies] weapons: " + level.zm_pool.size + "\n" );
+	print( "[zombies] weapons: " + level.zm_pool.size );
 	foreach( w in level.zm_pool )
-		print( "[zombies]   " + w + " (" + weaponclass( w ) + ")\n" );
+		print( "[zombies]   " + zm_weapon_name( w ) + " - " + w + " (" + weaponclass( w ) + ")" );
 }
 
 zm_pool_add( weapon )
@@ -187,20 +152,31 @@ zm_pool_add( weapon )
 	if( weapon == "none" || weapon == "" || isdefined( level.zm_pool_names[ weapon ] ) )
 		return;
 	level.zm_pool_names[ weapon ] = true;
+	// Lock-on launchers only target vehicles: useless against zombies.
+	if( issubstr( weapon, "stinger" ) || issubstr( weapon, "javelin" ) )
+		return;
 	if( weaponinventorytype( weapon ) == "primary" )
 		level.zm_pool[ level.zm_pool.size ] = weapon;
 }
 
-// Zombies come from the level's soldier spawners, enemy ones preferred.
+// Zombies come from the level's soldier spawners, enemy ones preferred. The
+// spawners have no team set, so their class names (actor_enemy_...) decide.
 zm_find_spawners()
 {
 	enemies = [];
 	others = [];
+	counts = [];
 	foreach( s in getspawnerarray() )
 	{
 		if( !isdefined( s.classname ) || !issubstr( s.classname, "actor" ) )
 			continue;
-		if( isdefined( s.team ) && s.team == "axis" )
+		name = tolower( s.classname );
+		if( issubstr( name, "hero" ) || issubstr( name, "foley" ) || issubstr( name, "dunn" ) || issubstr( name, "raptor" ) || issubstr( name, "ramirez" ) )
+			continue;
+		if( !isdefined( counts[ name ] ) )
+			counts[ name ] = 0;
+		counts[ name ]++;
+		if( issubstr( name, "enemy" ) || issubstr( name, "axis" ) || ( isdefined( s.team ) && s.team == "axis" ) )
 			enemies[ enemies.size ] = s;
 		else
 			others[ others.size ] = s;
@@ -212,7 +188,9 @@ zm_find_spawners()
 		level.zm_spawners = others;
 		level.zm_switch_team = true;
 	}
-	print( "[zombies] spawners: " + enemies.size + " enemy, " + others.size + " other\n" );
+	print( "[zombies] spawners: " + enemies.size + " enemy, " + others.size + " other" );
+	foreach( name, n in counts )
+		print( "[zombies]   " + name + " x" + n );
 }
 
 // Keep the level empty. Enemy soldiers are removed; friendlies are hidden and
@@ -252,16 +230,68 @@ zm_cleaner()
 // ---------------------------------------------------------------------------
 // Nate's: the indoor spots, and keeping the player inside
 
+// Nate's outline: the box around the level's Nate's walls and windows,
+// grown a little. Measured in-game as a fallback.
+zm_find_nates_bounds()
+{
+	lo = undefined;
+	hi = undefined;
+	pieces = 0;
+	foreach( ent in getentarray() )
+	{
+		if( !isdefined( ent.targetname ) || !issubstr( ent.targetname, "nates_" ) || !issubstr( ent.targetname, "bombing" ) )
+			continue;
+		a = ent getpointinbounds( -1, -1, -1 );
+		b = ent getpointinbounds( 1, 1, 1 );
+		if( !isdefined( lo ) )
+		{
+			lo = a;
+			hi = b;
+		}
+		lo = ( zm_min( lo[0], a[0] ), zm_min( lo[1], a[1] ), zm_min( lo[2], a[2] ) );
+		hi = ( zm_max( hi[0], b[0] ), zm_max( hi[1], b[1] ), zm_max( hi[2], b[2] ) );
+		pieces++;
+	}
+	if( !isdefined( lo ) )
+	{
+		lo = ( -100, -5070, 2290 );
+		hi = ( 660, -4280, 2520 );
+	}
+	level.zm_lo = lo - ( 24, 24, 64 );
+	level.zm_hi = hi + ( 24, 24, 64 );
+	print( "[zombies] Nate's outline from " + pieces + " pieces: " + zm_vec_text( level.zm_lo ) + " to " + zm_vec_text( level.zm_hi ) );
+}
+
+zm_min( a, b )
+{
+	if( a < b )
+		return a;
+	return b;
+}
+
+zm_max( a, b )
+{
+	if( a > b )
+		return a;
+	return b;
+}
+
+zm_in_nates_box( pos, margin )
+{
+	return pos[0] >= level.zm_lo[0] - margin && pos[0] <= level.zm_hi[0] + margin
+		&& pos[1] >= level.zm_lo[1] - margin && pos[1] <= level.zm_hi[1] + margin
+		&& pos[2] >= level.zm_lo[2] - margin && pos[2] <= level.zm_hi[2] + margin;
+}
+
 zm_has_roof( point )
 {
 	trace = bullettrace( point + ( 0, 0, 40 ), point + ( 0, 0, 600 ), false, undefined );
 	return trace[ "fraction" ] < 1;
 }
 
-// Nate's inside is the level's path nodes with a roof overhead, grown from
-// the start spot through open space (never through a wall), so the shops
-// next door aren't part of it. Outdoor nodes further out are where zombies
-// appear.
+// Nate's inside is the level's path nodes inside Nate's outline with a roof
+// overhead, grown from the start spot through open space (never through a
+// wall). Outdoor nodes further out are where zombies appear.
 zm_build_area()
 {
 	center = level.zm_start;
@@ -274,9 +304,9 @@ zm_build_area()
 			wait 0.05;
 		d = distance( node.origin, center );
 		roofed = zm_has_roof( node.origin );
-		if( d < 1200 && roofed )
+		if( zm_in_nates_box( node.origin, 0 ) && roofed )
 			cands[ cands.size ] = node.origin;
-		if( d > 700 && d < 2400 && !roofed && level.zm_spawn_spots.size < 400 )
+		else if( !roofed && !zm_in_nates_box( node.origin, 150 ) && zm_in_nates_box( node.origin, 1000 ) && level.zm_spawn_spots.size < 400 )
 			level.zm_spawn_spots[ level.zm_spawn_spots.size ] = node.origin;
 	}
 
@@ -321,18 +351,20 @@ zm_build_area()
 		}
 	}
 	level.zm_area = area;
-	print( "[zombies] Nate's: " + area.size + " indoor spots, " + level.zm_spawn_spots.size + " zombie spawn spots outside (" + checked + " path nodes)\n" );
+	print( "[zombies] Nate's: " + area.size + " indoor spots, " + level.zm_spawn_spots.size + " zombie spawn spots outside (" + checked + " path nodes)" );
 }
 
+// Inside Nate's: within its outline and under its roof (or a step from an
+// indoor spot, for doorways).
 zm_inside( pos )
 {
-	roofed = zm_has_roof( pos );
+	if( !zm_in_nates_box( pos, 0 ) )
+		return false;
+	if( zm_has_roof( pos ) )
+		return true;
 	foreach( p in level.zm_area )
 	{
-		if( abs( p[2] - pos[2] ) > 90 )
-			continue;
-		d = distance2d( p, pos );
-		if( d < 72 || ( roofed && d < 200 ) )
+		if( abs( p[2] - pos[2] ) < 90 && distance2d( p, pos ) < 72 )
 			return true;
 	}
 	return false;
@@ -381,6 +413,8 @@ zm_game()
 	zm_place_buys();
 	level thread zm_player_loop();
 	level thread zm_player_death_watch();
+	level thread zm_hit_recovery();
+	level.player thread zm_no_health_shield();
 
 	zm_say( "Zombies: " + level.zm_spawners.size + " spawners, " + level.zm_pool.size + " weapons, " + level.zm_buys.size + " things to buy" );
 	iprintlnbold( "Wall weapons, perks and an ammo crate are on Nate's walls" );
@@ -484,7 +518,6 @@ zm_spawn_spot()
 // from round 6.
 zm_spawn_zombie( r )
 {
-	spot = zm_spawn_spot();
 	spawner = level.zm_spawners[ randomint( level.zm_spawners.size ) ];
 	spawner.count = 1;
 	if( level.zm_switch_team )
@@ -499,10 +532,29 @@ zm_spawn_zombie( r )
 	}
 	level.zm_spawn_failures = 0;
 	z.zm_zombie = true;
+	level.zm_zombies[ level.zm_zombies.size ] = z;
+	level.zm_spawned_total++;
+	// Everything else runs in the zombie's own thread, so a problem with one
+	// soldier can't stop the round.
+	z thread zm_zombie_setup( r );
+	return z;
+}
+
+zm_zombie_setup( r )
+{
+	self endon( "death" );
 	if( level.zm_switch_team )
-		z.team = "axis";
-	if( isdefined( z.weapon ) )
-		zm_pool_add( z.weapon );
+		self.team = "axis";
+
+	// Get it moving toward the player first.
+	spot = zm_spawn_spot();
+	if( isdefined( spot ) )
+		self forceteleport( spot, ( 0, randomint( 360 ), 0 ) );
+	self.ignoreall = true;
+	self.ignoreme = true;
+	self.fixednode = false;
+	self.goalradius = 32;
+	self setgoalpos( level.player.origin );
 
 	kind = "walker";
 	roll = randomint( 100 );
@@ -513,33 +565,65 @@ zm_spawn_zombie( r )
 	health = zm_round_health( r );
 	if( kind == "brute" )
 		health = health * 3;
-	z.zm_kind = kind;
-	z.zm_hit = 45;
+	self.zm_kind = kind;
+	self.zm_hit = 45;
 	if( kind == "brute" )
-		z.zm_hit = 70;
-	if( kind == "runner" )
-		z.moveplaybackrate = 1.3;
+		self.zm_hit = 70;
+	// The mod keeps each zombie's health itself and kills it when it runs
+	// out: some of the level's soldiers are made invincible by its scripts.
+	self.zm_hp = health;
+	self.health = 100000;
+	self.maxhealth = 100000;
 
-	if( isdefined( spot ) )
-		z forceteleport( spot, ( 0, randomint( 360 ), 0 ) );
-	z.ignoreall = true;
-	z.fixednode = false;
-	z.ignoreme = true;
-	z.grenadeammo = 0;
-	z.dropweapon = false;
-	z.goalradius = 24;
-	z.health = health;
-	z.maxhealth = health;
-	level.zm_zombies[ level.zm_zombies.size ] = z;
-
-	z setgoalentity( level.player );
-	z thread zm_zombie_attack();
-	z thread zm_zombie_unstick();
-	z thread zm_zombie_damage();
-	z thread zm_zombie_death();
-	return z;
+	self thread zm_zombie_damage();
+	self thread zm_zombie_death();
+	self thread zm_zombie_chase();
+	self thread zm_zombie_attack();
+	self thread zm_zombie_look();
+	if( level.zm_spawned_total <= 3 )
+		self thread zm_zombie_report();
+	if( isdefined( self.weapon ) )
+		zm_pool_add( self.weapon );
 }
 
+// Make the soldier act less like a soldier: walk (runners run) straight at
+// you, don't duck, dodge, take cover or shoot, and hide the gun. Its own
+// thread: a setting the game won't take only stops this thread.
+zm_zombie_look()
+{
+	self endon( "death" );
+	self.grenadeammo = 0;
+	self.dropweapon = false;
+	self.dontevershoot = true;
+	self.baseaccuracy = 0;
+	self.combatmode = "no_cover";
+	self.ignoresuppression = true;
+	self.disablebulletwhizbyreaction = true;
+	self.disablearrivals = true;
+	self.disableexits = true;
+	self.nododgemove = true;
+	self.flashbangimmunity = true;
+	if( self.zm_kind == "runner" )
+	{
+		self.walkdist = 0;
+		self.moveplaybackrate = 1.2;
+	}
+	else
+		self.walkdist = 100000;
+	if( self.zm_kind == "brute" )
+		self.allowpain = false;
+	self hidepart( "tag_weapon_right" );
+}
+
+// For the console: is the first zombie of the game actually closing in?
+zm_zombie_report()
+{
+	self endon( "death" );
+	start = self.origin;
+	start_d = distance( self.origin, level.player.origin );
+	wait 10;
+	print( "[zombies] zombie (" + self.zm_kind + ") moved " + int( distance( start, self.origin ) ) + " in 10s; distance to you " + int( start_d ) + " -> " + int( distance( self.origin, level.player.origin ) ) );
+}
 zm_zombie_attack()
 {
 	self endon( "death" );
@@ -561,66 +645,104 @@ zm_zombie_attack()
 
 // Zombies walk the level's own paths; a long stall gets one a fresh start
 // somewhere out of sight.
-zm_zombie_unstick()
+zm_zombie_chase()
 {
 	self endon( "death" );
 	level endon( "zm_end" );
-	last = self.origin;
-	still = 0;
+	goal = level.player.origin;
+	self setgoalpos( goal );
+	best = distance( self.origin, level.player.origin );
+	stalled = 0;
+	tick = 0;
 	for( ;; )
 	{
 		wait 0.5;
+		tick++;
 		// The level's own spawn scripts may hand a fresh soldier a scripted
 		// path; keep pointing it at the player.
 		self.ignoreall = true;
-		self setgoalentity( level.player );
-		if( distance( self.origin, level.player.origin ) < 70 || distance( self.origin, last ) >= 8 )
+		if( tick % 2 == 0 || distance( goal, level.player.origin ) > 48 )
 		{
-			still = 0;
-			last = self.origin;
+			goal = level.player.origin;
+			self setgoalpos( goal );
+		}
+		d = distance( self.origin, level.player.origin );
+		if( d < 100 || d < best - 32 )
+		{
+			if( d < best )
+				best = d;
+			stalled = 0;
 			continue;
 		}
-		still += 0.5;
-		if( still >= 8 )
+		stalled += 0.5;
+		if( stalled >= 6 )
 		{
-			spot = zm_spawn_spot();
+			// No way in (the level may keep Nate's doors shut): it climbs in
+			// somewhere you aren't looking.
+			spot = zm_inside_spot();
 			if( isdefined( spot ) )
 				self forceteleport( spot, self.angles );
-			still = 0;
+			best = distance( self.origin, level.player.origin );
+			stalled = 0;
 		}
 	}
 }
 
+// An indoor spot in Nate's away from the player and out of their sight.
+zm_inside_spot()
+{
+	if( level.zm_area.size == 0 )
+		return undefined;
+	eye = level.player.origin + ( 0, 0, 60 );
+	far = level.zm_area[0];
+	for( i = 0; i < 16; i++ )
+	{
+		p = level.zm_area[ randomint( level.zm_area.size ) ];
+		if( distance( p, level.player.origin ) > distance( far, level.player.origin ) )
+			far = p;
+		if( distance( p, level.player.origin ) < 250 )
+			continue;
+		if( !sighttracepassed( eye, p + ( 0, 0, 48 ), false, undefined ) )
+			return p;
+	}
+	return far;
+}
 zm_zombie_damage()
 {
 	self endon( "death" );
 	for( ;; )
 	{
 		self waittill( "damage", amount, attacker, direction, point, type, model, tag, part );
-		if( isdefined( self.zm_own_damage ) )
-		{
-			self.zm_own_damage = undefined;
-			continue;
-		}
 		if( !isdefined( attacker ) || attacker != level.player )
 			continue;
 		self.zm_last_type = type;
 		self.zm_last_part = part;
+		// The starting pistol hits half again as hard.
+		if( type != "MOD_MELEE" && isdefined( level.zm_starter ) && level.player getcurrentweapon() == level.zm_starter )
+			amount = amount * 1.5;
+		self.zm_hp -= amount;
 		if( level.zm_insta )
+			self.zm_hp = 0;
+		if( self.zm_hp <= 0 )
 		{
-			self.zm_own_damage = true;
-			self dodamage( self.health + 100, self.origin, level.player );
+			// Its own thread, and tried again on the next hit if it fails.
+			self thread zm_kill_zombie();
+			continue;
 		}
-		else if( isdefined( level.zm_perks[ "doubletap" ] ) && type != "MOD_MELEE" && isalive( self ) )
-		{
-			self.zm_own_damage = true;
-			self dodamage( int( amount * 0.5 ) + 1, self.origin, level.player );
-		}
-		if( isalive( self ) )
-			zm_add_points( 10 );
+		zm_add_points( 10 );
 	}
 }
 
+zm_kill_zombie()
+{
+	self endon( "death" );
+	self.zm_hp = 0;
+	self.allowdeath = true;
+	self.health = 1;
+	self dodamage( 100, self.origin, level.player );
+	wait 0.05;
+	self kill();
+}
 zm_zombie_death()
 {
 	self waittill( "death" );
@@ -640,31 +762,72 @@ zm_zombie_death()
 		level thread zm_powerup_drop( origin );
 }
 
-// No zombie animations exist, so a hit is all feel: damage, a jolt toward
-// the attacker, a shake and a red flash. Quick Revive turns a killing hit
-// into a fresh start once.
+// Three hits and you're down; a brute's hit counts double. Each one jolts
+// you toward the zombie, shakes the screen and flashes it red. Quick Revive
+// turns the last hit into a fresh start once.
 zm_player_hit( zombie )
 {
-	damage = 45;
-	if( isdefined( zombie.zm_hit ) )
-		damage = zombie.zm_hit;
-	level.player viewkick( 60, zombie.origin );
-	earthquake( 0.35, 0.4, level.player.origin, 120 );
+	hits = 1;
+	if( isdefined( zombie.zm_kind ) && zombie.zm_kind == "brute" )
+		hits = 2;
+	level.zm_hits += hits;
+	level.zm_last_hit = gettime();
+
+	level.player viewkick( 127, zombie.origin );
+	earthquake( 0.6, 0.6, level.player.origin, 160 );
 	flash = level.zm_hud_flash;
-	flash.alpha = 0.45;
-	flash fadeovertime( 0.5 );
+	flash.alpha = 0.7;
+	flash fadeovertime( 0.8 );
 	flash.alpha = 0;
 
-	if( level.player.health - damage <= 0 && isdefined( level.zm_perks[ "quickrevive" ] ) )
+	if( level.zm_hits >= 3 )
 	{
-		level.zm_perks[ "quickrevive" ] = undefined;
-		zm_perks_hud_update();
-		level thread zm_quick_revive();
+		level.zm_hits = 0;
+		if( isdefined( level.zm_perks[ "quickrevive" ] ) )
+		{
+			level.zm_perks[ "quickrevive" ] = undefined;
+			zm_perks_hud_update();
+			level thread zm_quick_revive();
+			return;
+		}
+		level.player thread zm_player_down();
 		return;
 	}
-	level.player dodamage( damage, zombie.origin, zombie );
+	// A third of your health per hit, so you can see how close you are.
+	level.player.health = int( level.player.maxhealth * ( 3 - level.zm_hits ) / 3 );
 }
 
+zm_player_down()
+{
+	self disableinvulnerability();
+	self dodamage( self.health + 1000, self.origin );
+	wait 0.1;
+	if( isalive( self ) )
+		self kill();
+}
+
+// Four seconds without being hit and you've recovered.
+zm_hit_recovery()
+{
+	level endon( "zm_end" );
+	level.player endon( "death" );
+	for( ;; )
+	{
+		wait 0.25;
+		if( level.zm_hits > 0 && gettime() - level.zm_last_hit > 4000 )
+		{
+			level.zm_hits = 0;
+			level.player.health = level.player.maxhealth;
+		}
+	}
+}
+
+// Its own thread: the game's "near death" shield would otherwise let you
+// survive the third hit.
+zm_no_health_shield()
+{
+	self enablehealthshield( false );
+}
 zm_quick_revive()
 {
 	level.player enableinvulnerability();
@@ -696,6 +859,7 @@ zm_setup_player()
 		if( weaponclass( w ) == "pistol" )
 			pistol = w;
 	}
+	level.zm_starter = pistol;
 	if( isdefined( pistol ) )
 	{
 		offhands = level.player getweaponslistoffhands();
@@ -709,7 +873,6 @@ zm_setup_player()
 		}
 		level.player switchtoweapon( pistol );
 	}
-	level.zm_base_health = level.player.maxhealth;
 	level.player setnormalhealth( 1 );
 }
 
@@ -793,33 +956,20 @@ zm_hint( text )
 
 zm_perk_list()
 {
-	return strtok( "juggernog|staminup|doubletap|quickrevive", "|" );
+	return strtok( "quickrevive", "|" );
 }
-
 zm_perk_name( perk )
 {
-	if( perk == "juggernog" )
-		return "Juggernog";
-	if( perk == "staminup" )
-		return "Stamin-Up";
-	if( perk == "doubletap" )
-		return "Double Tap";
 	return "Quick Revive";
 }
-
 zm_perk_cost( perk )
 {
-	if( perk == "juggernog" )
-		return 2500;
-	if( perk == "quickrevive" )
-		return 1500;
-	return 2000;
+	return 1500;
 }
-
 zm_place_buys()
 {
 	center = level.zm_start;
-	spots = zm_spread( level.zm_area, 9 );
+	spots = zm_spread( level.zm_area, 6 );
 	slot = 0;
 
 	// Four wall weapons.
@@ -842,8 +992,9 @@ zm_place_buys()
 			m = zm_extra( spawn( "script_model", wall.origin ) );
 			m setmodel( model );
 			m.angles = ( 0, wall.yaw + 90, 0 );
+			m thread zm_outline( 5 );
 		}
-		print( "[zombies] wall weapon " + weapon + " at " + zm_vec_text( wall.origin ) + "\n" );
+		print( "[zombies] wall weapon " + zm_weapon_name( weapon ) + " (" + weapon + ") at " + zm_vec_text( wall.origin ) );
 	}
 
 	// Perks, shown with a machine-like prop from the level when there is one.
@@ -860,7 +1011,7 @@ zm_place_buys()
 			m setmodel( machine );
 			m.angles = ( 0, wall.yaw, 0 );
 		}
-		print( "[zombies] perk " + zm_perk_name( perk ) + " at " + zm_vec_text( wall.origin ) + "\n" );
+		print( "[zombies] perk " + zm_perk_name( perk ) + " at " + zm_vec_text( wall.origin ) );
 	}
 
 	// Ammo crate.
@@ -872,7 +1023,7 @@ zm_place_buys()
 		m = zm_extra( spawn( "script_model", wall.origin - ( 0, 0, 48 ) ) );
 		m setmodel( crate );
 	}
-	print( "[zombies] ammo crate at " + zm_vec_text( wall.origin ) + "\n" );
+	print( "[zombies] ammo crate at " + zm_vec_text( wall.origin ) );
 
 	// Mystery box near (not on) the start spot.
 	box_at = center;
@@ -889,7 +1040,13 @@ zm_place_buys()
 		m = zm_extra( spawn( "script_model", box_at ) );
 		m setmodel( box );
 	}
-	print( "[zombies] mystery box at " + zm_vec_text( box_at ) + "\n" );
+	print( "[zombies] mystery box at " + zm_vec_text( box_at ) );
+}
+
+// Its own thread: if outlines aren't available only this thread stops.
+zm_outline( color )
+{
+	self hudoutlineenable( color, false );
 }
 
 zm_buy( kind, origin, cost )
@@ -998,10 +1155,24 @@ zm_pick_weapon( classes, used )
 	}
 	foreach( w in level.zm_pool )
 	{
-		if( !isdefined( used[ w ] ) && weaponclass( w ) != "pistol" )
+		if( !isdefined( used[ w ] ) && weaponclass( w ) != "pistol" && weaponclass( w ) != "rocketlauncher" )
 			return w;
 	}
 	return undefined;
+}
+
+// The name players know a weapon by, from the start of its internal name.
+zm_weapon_name( weapon )
+{
+	table = strtok( "beretta393=M93 Raffica|beretta=M9|scar_h=SCAR-H|ak47=AK-47|m240=M240|m14ebr=M14 EBR|cheytac=Intervention|rpg=RPG-7|m4=M4A1|fal=FAL|tavor=TAR-21|masada=ACR|famas=FAMAS|aug=AUG HBAR|mp5k=MP5K|mp5=MP5|ump45=UMP45|kriss=Vector|p90=P90|uzi=Mini-Uzi|spas12=SPAS-12|aa12=AA-12|striker=Striker|m1014=M1014|ranger=Ranger|model1887=Model 1887|barrett=Barrett .50cal|wa2000=WA2000|m21=M21 EBR|dragunov=Dragunov|sa80=L86 LSW|rpd=RPD|mg4=MG4|glock=G18|usp=USP .45|deserteagle=Desert Eagle|coltanaconda=.44 Magnum|pp2000=PP2000|tmp=TMP|at4=AT4|m79=Thumper|m16=M16A4|fn2000=F2000|g36=G36C|m249=M249 SAW|saw=M249 SAW", "|" );
+	foreach( entry in table )
+	{
+		pair = strtok( entry, "=" );
+		prefix = pair[0];
+		if( weapon.size >= prefix.size && getsubstr( weapon, 0, prefix.size ) == prefix )
+			return pair[1];
+	}
+	return weapon;
 }
 
 zm_player_loop()
@@ -1059,7 +1230,7 @@ zm_buy_text( b )
 	}
 	if( level.player hasweapon( b.weapon ) )
 		return "Press [Use] for ammo [" + int( b.cost / 2 ) + "]";
-	return "Press [Use] to buy " + b.weapon + " [" + b.cost + "]";
+	return "Press [Use] to buy " + zm_weapon_name( b.weapon ) + " [" + b.cost + "]";
 }
 
 zm_use_buy( b )
@@ -1116,22 +1287,13 @@ zm_give_weapon( weapon )
 	level.player switchtoweapon( weapon );
 }
 
-// Perks are script effects: Juggernog 2.5x health, Stamin-Up faster
-// movement, Double Tap half again the damage, Quick Revive one saved death.
+// Quick Revive: the hit that would take you down revives you instead, once.
 zm_give_perk( perk )
 {
 	level.zm_perks[ perk ] = true;
-	if( perk == "juggernog" )
-	{
-		level.player.maxhealth = int( level.zm_base_health * 2.5 );
-		level.player.health = level.player.maxhealth;
-	}
-	else if( perk == "staminup" )
-		level.player setmovespeedscale( 1.15 );
 	iprintlnbold( zm_perk_name( perk ) );
 	zm_perks_hud_update();
 }
-
 zm_perks_hud_update()
 {
 	text = "";
@@ -1224,7 +1386,7 @@ zm_powerup_apply( type )
 		foreach( z in level.zm_zombies )
 		{
 			if( isdefined( z ) && isalive( z ) )
-				z dodamage( z.health + 100, z.origin, level.player );
+				z thread zm_kill_zombie();
 		}
 		zm_add_points( 400 );
 	}

@@ -19,6 +19,9 @@ H2_FUNCTIONS = {
     "spawn", "spawnstruct", "strtok", "tolower", "vectortoangles", "weaponclass", "weaponinventorytype",
 }
 H2_METHODS = {
+    "enablehealthshield", "hidepart", "hudoutlineenable", "kill", "playerclearstreamorigin", "playersetstreamorigin",
+    "setgoalpos",
+    "getpointinbounds",
     "delete", "disableinvulnerability", "dodamage", "enableinvulnerability", "enableweapons", "fadeovertime",
     "forceteleport", "freezecontrols", "getcurrentweapon", "getweaponslistall", "getweaponslistoffhands",
     "getweaponslistprimaries", "givemaxammo", "giveweapon", "hasweapon", "hide", "islinked", "notsolid",
