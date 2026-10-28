@@ -173,55 +173,55 @@ nacht_clear()
 // which orientation, how many of each. Nothing is spawned here.
 nacht_plan_box( kit, box )
 {
-	size = box.maxs - box.mins;
-	thin = nacht_thin_axis( size );
+	dims = box.maxs - box.mins;
+	thin = nacht_thin_axis( dims );
 
 	p = spawnstruct();
 	p.box = box;
-	p.visual = nacht_best_tile( kit.panel_tiles[ thin ], size, thin );
+	p.visual = nacht_best_tile( kit.panel_tiles[ thin ], dims, thin );
 	if( box.kind == "window" && isdefined( kit.board ) )
-		p.visual = nacht_best_tile( kit.board_tiles[ thin ], size, thin );
-	p.visual_count = nacht_tile_count( p.visual, size );
+		p.visual = nacht_best_tile( kit.board_tiles[ thin ], dims, thin );
+	p.visual_count = nacht_tile_count( p.visual, dims );
 
 	// Collision: whichever of the map's brush shapes covers it with fewest copies.
 	best = undefined;
 	foreach( brush in kit.brushes )
 	{
-		candidate = nacht_best_tile( brush.tiles[ thin ], size, thin );
+		candidate = nacht_best_tile( brush.tiles[ thin ], dims, thin );
 		if( !isdefined( candidate ) )
 			continue;
 		if( !isdefined( best ) || candidate.score < best.score )
 			best = candidate;
 	}
 	p.solid = best;
-	p.solid_count = nacht_tile_count( best, size );
+	p.solid_count = nacht_tile_count( best, dims );
 	return p;
 }
 
-nacht_thin_axis( size )
+nacht_thin_axis( dims )
 {
-	if( size[2] <= size[0] && size[2] <= size[1] )
+	if( dims[2] <= dims[0] && dims[2] <= dims[1] )
 		return 2;
-	if( size[0] <= size[1] )
+	if( dims[0] <= dims[1] )
 		return 0;
 	return 1;
 }
 
 // Of a tile's orientations, the one that covers the box with the fewest
 // copies without poking out of its ends (poking out of the thickness is fine).
-nacht_best_tile( tiles, size, thin )
+nacht_best_tile( tiles, dims, thin )
 {
 	if( !isdefined( tiles ) )
 		return undefined;
 	best = undefined;
 	foreach( t in tiles )
 	{
-		count = nacht_tile_count( t, size );
+		count = nacht_tile_count( t, dims );
 		overhang = 0;
 		for( i = 0; i < 3; i++ )
 		{
-			if( i != thin && t.size[i] > size[i] + 4 )
-				overhang += t.size[i] - size[i];
+			if( i != thin && t.dims[i] > dims[i] + 4 )
+				overhang += t.dims[i] - dims[i];
 		}
 		t.score = count + overhang * 4;
 		if( !isdefined( best ) || t.score < best.score )
@@ -230,21 +230,21 @@ nacht_best_tile( tiles, size, thin )
 	return best;
 }
 
-nacht_tile_count( t, size )
+nacht_tile_count( t, dims )
 {
 	if( !isdefined( t ) )
 		return 0;
 	n = 1;
 	for( i = 0; i < 3; i++ )
-		n *= nacht_steps( size[i], t.size[i] );
+		n *= nacht_steps( dims[i], t.dims[i] );
 	return n;
 }
 
-nacht_steps( length, step )
+nacht_steps( span, step )
 {
-	if( step <= 0 || length <= step )
+	if( step <= 0 || span <= step )
 		return 1;
-	return int( ceil( length / step ) );
+	return int( ceil( span / step ) );
 }
 
 // Spawn copies of tile t so they cover the box: evenly spaced, the last one
@@ -254,19 +254,19 @@ nacht_fill( box, t, anchor )
 	spawned = [];
 	if( !isdefined( t ) )
 		return spawned;
-	size = box.maxs - box.mins;
-	n0 = nacht_steps( size[0], t.size[0] );
-	n1 = nacht_steps( size[1], t.size[1] );
-	n2 = nacht_steps( size[2], t.size[2] );
+	dims = box.maxs - box.mins;
+	n0 = nacht_steps( dims[0], t.dims[0] );
+	n1 = nacht_steps( dims[1], t.dims[1] );
+	n2 = nacht_steps( dims[2], t.dims[2] );
 	for( i = 0; i < n0; i++ )
 	{
 		for( j = 0; j < n1; j++ )
 		{
 			for( k = 0; k < n2; k++ )
 			{
-				centre = ( nacht_slot( box.mins[0], size[0], t.size[0], i, n0 ),
-					nacht_slot( box.mins[1], size[1], t.size[1], j, n1 ),
-					nacht_slot( box.mins[2], size[2], t.size[2], k, n2 ) );
+				centre = ( nacht_slot( box.mins[0], dims[0], t.dims[0], i, n0 ),
+					nacht_slot( box.mins[1], dims[1], t.dims[1], j, n1 ),
+					nacht_slot( box.mins[2], dims[2], t.dims[2], k, n2 ) );
 				ent = nacht_spawn_tile( t, anchor + centre );
 				if( isdefined( ent ) )
 				{
@@ -279,11 +279,11 @@ nacht_fill( box, t, anchor )
 	return spawned;
 }
 
-nacht_slot( start, length, step, index, count )
+nacht_slot( start, span, step, index, count )
 {
-	if( count <= 1 || length <= step )
-		return start + length / 2;
-	spacing = ( length - step ) / ( count - 1 );
+	if( count <= 1 || span <= step )
+		return start + span / 2;
+	spacing = ( span - step ) / ( count - 1 );
 	return start + step / 2 + spacing * index;
 }
 
@@ -344,10 +344,10 @@ nacht_pick_kit()
 	best_board = undefined;
 	foreach( name, unused in names )
 	{
-		size = nacht_model_size( name, probe_at );
-		if( !isdefined( size ) )
+		dims = nacht_model_size( name, probe_at );
+		if( !isdefined( dims ) )
 			continue;
-		sorted = nacht_sort3( size );
+		sorted = nacht_sort3( dims );
 		score = nacht_panel_score( name, sorted );
 		if( score > 0 && ( !isdefined( best_panel ) || score > best_panel.score ) )
 		{
@@ -402,7 +402,7 @@ nacht_tile_options( base, axis, probe_at, model, brush )
 	options = [];
 	if( !isdefined( base ) )
 		return options;
-	thin = nacht_thin_axis( base.size );
+	thin = nacht_thin_axis( base.dims );
 	angles = nacht_turn( thin, axis );
 	options[ options.size ] = nacht_measure( model, brush, angles, probe_at );
 	if( axis == 2 )
@@ -434,7 +434,7 @@ nacht_turn( from, to )
 }
 
 // Spawn a probe with this model or brush collision at these angles and read
-// its world bounding box. Returns size, the centre's offset from the origin,
+// its world bounding box. Returns dims, the centre's offset from the origin,
 // and what to spawn later.
 nacht_measure( model, brush, angles, probe_at )
 {
@@ -449,11 +449,11 @@ nacht_measure( model, brush, angles, probe_at )
 	hi = probe getpointinbounds( 1, 1, 1 );
 	probe delete();
 
-	size = hi - lo;
-	if( size[0] < 2 || size[1] < 2 || size[2] < 2 || size[0] > 1024 || size[1] > 1024 || size[2] > 1024 )
+	dims = hi - lo;
+	if( dims[0] < 2 || dims[1] < 2 || dims[2] < 2 || dims[0] > 1024 || dims[1] > 1024 || dims[2] > 1024 )
 		return undefined;
 	t = spawnstruct();
-	t.size = size;
+	t.dims = dims;
 	t.offset = ( lo + hi ) / 2 - probe_at;
 	t.angles = angles;
 	t.model = model;
@@ -467,7 +467,7 @@ nacht_model_size( name, probe_at )
 	t = nacht_measure( name, undefined, ( 0, 0, 0 ), probe_at );
 	if( !isdefined( t ) )
 		return undefined;
-	return t.size;
+	return t.dims;
 }
 
 nacht_sort3( v )
@@ -1013,14 +1013,15 @@ nacht_setup_windows()
 			if( mid[1] > centre[1] )
 				dir = ( 0, 1, 0 );
 		}
-		floor = level.nacht_anchor + ( mid[0], mid[1], 0 );
+		base_point = level.nacht_anchor + ( mid[0], mid[1], 0 );
 
 		w = spawnstruct();
 		w.tag = tag;
 		w.needs = needs[ tag ];
-		w.inside = floor - dir * 40 + ( 0, 0, 4 );
-		w.outside = nacht_ground( floor + dir * 64 );
-		w.yaw_in = vectortoangles( dir * -1 )[1];
+		w.inside = base_point - dir * 40 + ( 0, 0, 4 );
+		w.outside = nacht_ground( base_point + dir * 64 );
+		angles_in = vectortoangles( dir * -1 );
+		w.yaw_in = angles_in[1];
 		w.visuals = [];
 		foreach( e in piece.ents )
 		{
@@ -1290,15 +1291,15 @@ nacht_box_spin( b )
 {
 	level endon( "nacht_end" );
 	level.nacht_box_busy = true;
-	show = nacht_extra( spawn( "script_model", b.origin + ( 0, 0, 16 ) ) );
+	showcase = nacht_extra( spawn( "script_model", b.origin + ( 0, 0, 16 ) ) );
 	choice = undefined;
 	for( i = 0; i < 20; i++ )
 	{
 		choice = level.nacht_pool[ randomint( level.nacht_pool.size ) ];
 		model = getweaponmodel( choice );
 		if( isdefined( model ) && model != "" )
-			show setmodel( model );
-		show.origin = b.origin + ( 0, 0, 16 + i );
+			showcase setmodel( model );
+		showcase.origin = b.origin + ( 0, 0, 16 + i );
 		wait 0.15;
 	}
 	// Offer it for 10 seconds; nacht_use_buy clears the offer when taken.
@@ -1306,7 +1307,7 @@ nacht_box_spin( b )
 	for( t = 0; t < 100 && isdefined( level.nacht_box_offer ); t++ )
 		wait 0.1;
 	level.nacht_box_offer = undefined;
-	show delete();
+	showcase delete();
 	level.nacht_box_busy = false;
 }
 

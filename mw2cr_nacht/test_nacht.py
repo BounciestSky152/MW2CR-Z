@@ -70,3 +70,13 @@ def test_menu_script_and_mod_info():
     assert 'LUI.addmenubutton("main_campaign"' in lua and "nacht_autostart" in lua
     info = json.loads((ROOT / "mod/nacht/info.json").read_text())
     assert info["name"]
+
+
+def test_no_reserved_words_or_call_indexing():
+    """MW2CR's compiler rejects `x.size[i]` on structs, `size` as a name, and
+    indexing a call result like `f()[1]`."""
+    c = code()
+    for word in ("size", "call", "default", "case", "game", "anim", "do", "assert", "istrue", "thisthread"):
+        assert not re.search(r"(?<![\w.])%s\b" % word, c), word
+    assert not re.search(r"\.size\s*\[", c)
+    assert not re.search(r"\)\s*\[", c)
