@@ -243,8 +243,8 @@ zm_open_area()
 // ---------------------------------------------------------------------------
 // The level streams its areas in and out as you move through it: triggers
 // along the way name the streamed zones (script_transient). Starting at
-// Nate's skips them, so set off the ones nearest Nate's and keep the zones
-// named around Nate's loaded.
+// Nate's skips them, so the zones named around Nate's are loaded and kept
+// loaded. (Setting off the level's own triggers swapped half the diner out.)
 zm_load_area_transients()
 {
 	sorted = [];
@@ -271,9 +271,6 @@ zm_load_area_transients()
 			print( "[zombies]   '" + ent.script_transient + "' " + zm_class_text( ent ) + " at " + zm_vec_text( ent.origin ) + ", " + d + " from Nate's" );
 		if( d > 3000 )
 			continue;
-		// The level's own handling, as if you had walked into it.
-		if( i < 3 && issubstr( zm_class_text( ent ), "trigger" ) )
-			ent notify( "trigger", level.player );
 		foreach( name in strtok( ent.script_transient, " ,;+" ) )
 		{
 			if( names.size < 6 && !zm_listed( names, name ) )
