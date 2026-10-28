@@ -1,4 +1,4 @@
-// Wolverines! Zombies for Modern Warfare 2 Campaign Remastered (h2-mod).
+// MW2CR Zombies for Modern Warfare 2 Campaign Remastered (h2-mod).
 //
 // With the mod loaded, Wolverines! (level "invasion") is a zombies mode: the
 // level is emptied, you're put inside Nate's Sports Bar & Grill and kept

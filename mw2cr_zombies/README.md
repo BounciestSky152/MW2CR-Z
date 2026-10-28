@@ -1,4 +1,4 @@
-# Wolverines! Zombies
+# MW2CR Zombies
 
 A zombies mode for **Call of Duty: Modern Warfare 2 Campaign Remastered**, made with
 [h2-mod](https://github.com/alicealys/h2-mod). You start inside **Nate's Sports Bar & Grill** on Wolverines!, you
@@ -6,7 +6,7 @@ can't leave, and zombies come in endless rounds.
 
 ## What's in it
 
-- **Main menu:** a ZOMBIES button on the campaign menu with PLAY (shows your best round) and HOW TO PLAY.
+- **Main menu:** an MW2CR ZOMBIES button on the campaign menu with PLAY (shows your best round) and HOW TO PLAY.
 - **Rounds:** endless, more and tougher zombies each round, a short break between rounds.
 - **Zombies:** the level's Russian soldiers, walking (runners run) straight at you without ducking, taking
   cover or shooting, guns hidden. Walkers first, runners from round 3, tough brutes from round 6. They spawn
@@ -33,8 +33,8 @@ Wolverines! has loaded.
    updates.
 2. Double-click `install.bat` (or drag your MW2CR folder onto it). It copies the mod to `mods\zombies` and
    removes the old `mods\nacht`.
-3. Start `h2-mod.exe`, open **Mods**, load **Wolverines! Zombies** (the game restarts).
-4. **ZOMBIES → PLAY.**
+3. Start `h2-mod.exe`, open **Mods**, load **MW2CR Zombies** (the game restarts).
+4. **MW2CR ZOMBIES → PLAY.**
 
 The level starts you inside Nate's automatically. No console commands are needed.
 

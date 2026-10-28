@@ -1,4 +1,4 @@
--- Wolverines! Zombies: a ZOMBIES button on the campaign main menu opening this
+-- MW2CR Zombies: an MW2CR ZOMBIES button on the campaign main menu opening this
 -- mod's menu. PLAY loads Wolverines!; scripts/zombies.gsc turns it into the
 -- zombies mode in Nate's Sports Bar & Grill.
 
@@ -55,15 +55,15 @@ end
 
 LUI.addmenubutton("main_campaign", {
     index = 1,
-    text = string.el("ZOMBIES"),
-    description = string.el("Wolverines! Zombies: survive endless rounds inside Nate's Sports Bar & Grill."),
+    text = string.el("MW2CR ZOMBIES"),
+    description = string.el("MW2CR Zombies: survive endless rounds inside Nate's Sports Bar & Grill."),
     callback = function()
         LUI.FlowManager.RequestAddMenu(nil, "zm_menu")
     end
 })
 
 LUI.MenuBuilder.registerType("zm_menu", function(a1)
-    local menu = newmenu(a1, "WOLVERINES! ZOMBIES")
+    local menu = newmenu(a1, "MW2CR ZOMBIES")
 
     menu:AddButton(string.el("PLAY"), play, nil, true, nil, {
         desc_text = string.el("Start in Nate's Sports Bar & Grill on Wolverines!. Best round so far: " .. getbest())

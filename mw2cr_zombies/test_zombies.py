@@ -1,4 +1,4 @@
-"""Static checks on the Wolverines! Zombies mod. There's no MW2CR compiler
+"""Static checks on the MW2CR Zombies mod. There's no MW2CR compiler
 here, so these catch what the game's compiler would reject: engine calls that
 don't exist (or are functions called as methods), reserved words used as
 names, indexing a call result, duplicate functions, unbalanced brackets."""
@@ -103,7 +103,7 @@ def test_menu_and_mod_info():
     assert 'LUI.addmenubutton("main_campaign"' in lua and '"invasion"' in lua
     assert lua.count("registerType(") == 2
     info = json.loads((MOD / "info.json").read_text())
-    assert info["name"] == "Wolverines! Zombies"
+    assert info["name"] == "MW2CR Zombies"
 
 
 def test_installer_uses_windows_line_endings():

@@ -1,6 +1,6 @@
 @echo off
 setlocal
-rem Installs Wolverines! Zombies into your MW2 Campaign Remastered folder.
+rem Installs MW2CR Zombies into your MW2 Campaign Remastered folder.
 rem Double-click it, or drag your game folder onto it.
 
 set "SRC=%~dp0mod\zombies"
@@ -35,5 +35,5 @@ if not exist "%GAME%\h2-mod.exe" (
   echo and put it next to MW2CR.exe.
 )
 echo.
-echo Next: start h2-mod.exe, open Mods, load "Wolverines! Zombies", then ZOMBIES - PLAY.
+echo Next: start h2-mod.exe, open Mods, load "MW2CR Zombies", then MW2CR ZOMBIES - PLAY.
 pause
