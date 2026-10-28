@@ -13,7 +13,7 @@ MOD = ROOT / "mod" / "zombies"
 # (h2_func.cpp / h2_meth.cpp) and h2-mod's extensions (print, executecommand,
 # assetexists). Each one here was looked up in those tables.
 H2_FUNCTIONS = {
-    "ambientstop", "anglestoright", "musicstop", "precachemodel", "setdvar", "vectordot",
+    "ambientstop", "anglestoright", "getarraykeys", "musicstop", "precachemodel", "setdvar", "vectordot",
     "assetexists", "cos", "istransientloaded", "loadtransient", "sin",
     "abs", "anglestoforward", "bullettrace", "bullettracepassed", "distance", "distance2d", "earthquake",
     "executecommand", "getaiarray", "getallnodes", "getdvar", "getdvarint", "getentarray", "getspawnerarray",

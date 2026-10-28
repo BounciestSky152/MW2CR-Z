@@ -284,8 +284,61 @@ zm_load_area_transients()
 				names[ names.size ] = name;
 		}
 	}
+	// The level's checkpoints (its start points) name the zones each part of
+	// the mission needs: add the ones for Nate's first.
 	level.zm_transients = names;
+	zm_start_point_transients();
 	level thread zm_keep_transients();
+}
+
+// Lists the level's start points and any zones they name; the zones of the
+// ones at Nate's are loaded too. Each start point in its own thread: one the
+// mod can't read stops only itself.
+zm_start_point_transients()
+{
+	if( !isdefined( level.start_arrays ) )
+	{
+		print( "[zombies] no start points listed" );
+		return;
+	}
+	if( isdefined( level.start_point ) )
+		print( "[zombies] start point now: " + level.start_point );
+	foreach( name in getarraykeys( level.start_arrays ) )
+		level thread zm_start_point( name );
+	wait 0.05;
+}
+
+zm_start_point( name )
+{
+	entry = level.start_arrays[ name ];
+	keys = "";
+	zones = "";
+	foreach( key in getarraykeys( entry ) )
+	{
+		keys = keys + " " + key;
+		if( issubstr( tolower( key ), "transient" ) && isdefined( entry[ key ] ) )
+			zones = zones + " " + entry[ key ];
+	}
+	print( "[zombies] start point '" + name + "' (" + keys + " ) zones:" + zones );
+	if( !issubstr( tolower( name ), "nate" ) )
+		return;
+	foreach( zone in strtok( zones, " ,;+" ) )
+	{
+		if( !zm_listed( level.zm_transients, zone ) )
+			level.zm_transients = zm_add_first( level.zm_transients, zone );
+	}
+}
+
+zm_add_first( list, name )
+{
+	out = [];
+	out[0] = name;
+	foreach( entry in list )
+	{
+		if( out.size < 8 )
+			out[ out.size ] = entry;
+	}
+	return out;
 }
 
 zm_class_text( ent )
@@ -1477,14 +1530,44 @@ zm_item_color( item )
 zm_load_items()
 {
 	count = getdvarint( "zm_items" );
+	texts = [];
 	for( i = 0; i < count; i++ )
+		texts[ texts.size ] = getdvar( "zm_item" + i );
+	// Nothing placed in this game's config: the layout built into the mod.
+	if( count == 0 )
+		texts = strtok( zm_baked_items(), "|" );
+	foreach( text in texts )
 	{
-		item = zm_parse_item( getdvar( "zm_item" + i ) );
+		item = zm_parse_item( text );
 		if( isdefined( item ) )
 			zm_add_item( item );
 	}
 	print( "[zombies] placed things: " + level.zm_items.size );
+	zm_print_layout();
 	zm_update_rooms();
+}
+
+// The layout built into the mod, used when nothing has been placed with the
+// build menu: the "[zombies] LAYOUT ..." line from the console, pasted in.
+zm_baked_items()
+{
+	return "";
+}
+
+// Every placed thing, readably and as one LAYOUT line to build into the mod.
+zm_print_layout()
+{
+	layout = "";
+	for( i = 0; i < level.zm_items.size; i++ )
+	{
+		item = level.zm_items[i];
+		text = zm_item_text( item );
+		print( "[zombies] item " + i + ": " + zm_item_name( item ) + ", " + item.cost + " points, at " + zm_vec_text( item.origin ) + "  (" + text + ")" );
+		if( layout != "" )
+			layout = layout + "|";
+		layout = layout + text;
+	}
+	print( "[zombies] LAYOUT " + layout );
 }
 
 zm_parse_item( text )
@@ -1535,6 +1618,7 @@ zm_save_items()
 	for( i = 0; i < level.zm_items.size; i++ )
 		executecommand( "seta zm_item" + i + " \"" + zm_item_text( level.zm_items[i] ) + "\"" );
 	executecommand( "seta zm_items " + level.zm_items.size );
+	zm_print_layout();
 }
 
 // Puts a placed thing in the level: its models, outlined, and where you buy it.
