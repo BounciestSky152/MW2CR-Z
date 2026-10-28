@@ -1,3 +1,3 @@
-# MW2CR Wolverines! Zombies
+# Wolverines! Zombies (MW2 Campaign Remastered)
 
-See [mw2cr_nacht/README.md](mw2cr_nacht/README.md).
+See [mw2cr_zombies/README.md](mw2cr_zombies/README.md).
