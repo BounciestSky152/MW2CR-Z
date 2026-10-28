@@ -4,7 +4,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent / "mw2cr_nacht"
+ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("nacht_layout", ROOT / "layout.py")
 layout = importlib.util.module_from_spec(spec)
 sys.modules["nacht_layout"] = layout
