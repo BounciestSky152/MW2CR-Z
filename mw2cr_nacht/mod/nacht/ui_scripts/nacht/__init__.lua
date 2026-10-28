@@ -1,21 +1,15 @@
--- Nacht der Untoten menu: a button on the campaign main menu that opens a
--- level picker. Picking a level loads it and starts the zombies mode
--- (scripts/nacht.gsc sees nacht_autostart and builds Nacht once you can move).
+-- Burger Town Zombies: a button on the campaign main menu opens this mod's
+-- menu screen. PLAY loads Wolverines! and starts zombies in Burger Town
+-- (scripts/nacht.gsc sees nacht_autostart 2).
 
-local levels = {
-    { name = "S.S.D.D.", map = "trainer", desc = "The army base. Big, flat and open." },
-    { name = "Wolverines!", map = "invasion", desc = "Suburban streets in Virginia." },
-    { name = "Contingency", map = "contingency", desc = "Snowy forest outside the sub base." },
-    { name = "Loose Ends", map = "estate", desc = "Makarov's safehouse estate." },
-    { name = "Exodus", map = "arcadia", desc = "Arcadia's neighbourhood." },
-}
+local savedspot = "nacht_arena_invasion"
 
-local function startlevel(level)
+local function playburgertown()
     -- Same form the game's own level select uses: commands run as the level starts.
-    local cmd = "set nacht_autostart 1; devmap " .. level.map .. ";"
+    local cmd = "set nacht_autostart 2; devmap invasion;"
     pcall(function() LUI.FlowManager.PushMenuStackToDVar() end)
     if (Engine.StreamingInstallMap) then
-        Engine.StreamingInstallMap(level.map, cmd)
+        Engine.StreamingInstallMap("invasion", cmd)
     else
         Engine.Exec(cmd)
     end
@@ -23,8 +17,8 @@ end
 
 LUI.addmenubutton("main_campaign", {
     index = 1,
-    text = string.el("NACHT DER UNTOTEN"),
-    description = string.el("Survive the zombies in a Nacht der Untoten replica built from MW2 props."),
+    text = string.el("BURGER TOWN ZOMBIES"),
+    description = string.el("Survive endless rounds of zombies inside Burger Town on Wolverines!"),
     callback = function()
         LUI.FlowManager.RequestAddMenu(nil, "nacht_menu")
     end
@@ -32,7 +26,7 @@ LUI.addmenubutton("main_campaign", {
 
 LUI.MenuBuilder.registerType("nacht_menu", function(a1)
     local menu = LUI.MenuTemplate.new(a1, {
-        menu_title = string.el("NACHT DER UNTOTEN"),
+        menu_title = string.el("BURGER TOWN ZOMBIES"),
         exclusiveController = 0,
         menu_width = 400,
         menu_top_indent = LUI.MenuTemplate.spMenuOffset,
@@ -40,14 +34,15 @@ LUI.MenuBuilder.registerType("nacht_menu", function(a1)
         uppercase_title = true
     })
 
-    for i = 1, #levels do
-        local level = levels[i]
-        menu:AddButton(string.el(level.name), function()
-            startlevel(level)
-        end, nil, true, nil, {
-            desc_text = string.el(level.desc .. " Nacht is built where the level starts you.")
-        })
-    end
+    menu:AddButton(string.el("PLAY"), playburgertown, nil, true, nil, {
+        desc_text = string.el("Loads Wolverines! with the level emptied. The first time, walk into Burger Town and hold Use for 2 seconds; after that you start there.")
+    })
+
+    menu:AddButton(string.el("FORGET SAVED SPOT"), function()
+        Engine.Exec("seta " .. savedspot .. " \"\"")
+    end, nil, true, nil, {
+        desc_text = string.el("Next PLAY lets you walk to Burger Town and pick the spot again.")
+    })
 
     menu:AddBackButton(function(a)
         Engine.PlaySound(CoD.SFX.MenuBack)

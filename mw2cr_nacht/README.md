@@ -1,44 +1,41 @@
-# Nacht der Untoten for MW2 Campaign Remastered
+# Burger Town Zombies for MW2 Campaign Remastered
 
-A mod for [h2-mod](https://github.com/alicealys/h2-mod) that builds Nacht der Untoten's layout out of props
-already loaded in an MW2CR level and runs a Nacht-style zombies mode in it.
+A mod for [h2-mod](https://github.com/alicealys/h2-mod): endless Nacht-style zombie rounds inside Burger Town on
+Wolverines! (level `invasion`).
 
-- **Menu:** a NACHT DER UNTOTEN button on the campaign main menu, with a level picker.
-- **Building:** start room, Help room behind its debris door, stairs blocked by debris, two rooms upstairs,
-  boarded windows.
-- **Zombies:** endless rounds, more and tougher each round. Zombies come to the windows, tear the boards
-  off and climb in. Hold Use near a window to rebuild it (+10 per board).
+- **Menu:** a BURGER TOWN ZOMBIES button on the campaign main menu, with PLAY and FORGET SAVED SPOT.
+- **The level:** Wolverines! is emptied of its soldiers and vehicles. Zombies appear out of sight around
+  Burger Town and walk in through its real doors.
 - **Points:** 500 to start, +10 per hit, +60 per kill, +100 headshot kill, +130 knife kill.
-- **Buying:** four wall weapons (200 / 600 / 1200 / 1200, half price for ammo), Help door and stairs debris
-  (1000 each), mystery box (950).
+- **Buying:** four wall weapons hung on Burger Town's walls (200 / 600 / 1200 / 1200, half price for ammo)
+  and a mystery box (950). The box also gets every weapon the zombies carry.
 - **Power-ups:** Max Ammo, Double Points, Insta-Kill and Kaboom (kills everything, +400).
 - **Getting hit:** a jolt toward the zombie, screen shake and a red flash.
 
-MW2CR has no zombie models, so the zombies are the level's own soldiers told to ignore everything and rush
-you; they only hurt you up close. The weapons are whatever that level has loaded, so they differ per level.
+MW2CR has no zombie models, so the zombies are the level's own Russian soldiers told to ignore everything
+and rush you; they only hurt you up close.
 
 ## Install (Windows)
 
 1. Install h2-mod: put `h2-mod.exe` in your MW2CR folder and run it once (say Yes to updates).
 2. Copy `mod/nacht` into your MW2CR folder's `mods` folder, so you have `mods/nacht/scripts/nacht.gsc`.
-3. Start h2-mod, open **Mods** on the main menu and load **Nacht der Untoten** (the game restarts).
-4. Pick **NACHT DER UNTOTEN** on the main menu, then a level. Once the level lets you move, Nacht is built
-   around you and round 1 starts.
+3. Start h2-mod, open **Mods** on the main menu and load **Burger Town Zombies** (the game restarts).
+4. **BURGER TOWN ZOMBIES → PLAY.** The first time, walk into Burger Town and hold Use for 2 seconds where
+   you want to start; that spot is saved and later games start you there. If the way is blocked, the level
+   runs with cheats on, so `noclip` in the console (`~`) lets you fly there.
 
-Console alternatives (`~`): `set nacht_play 1` builds and starts here, `set nacht_build 1` only builds,
-`set nacht_clear 1` stops and removes everything.
+Console: `set nacht_here 1` starts zombies in the building you're standing in (any level),
+`set nacht_clear 1` stops. The older prop-built Nacht replica is still there: `set nacht_play 1`.
 
 ## If something's wrong
 
-Everything the mod does is printed to the console with `[nacht]` in front: the props it picked, how many
-pieces it placed, the weapons and spawners it found. Send those lines along with what you saw.
-
-Known limits: zombies don't know about Nacht's walls (the level's path network doesn't include them), so
-the mod nudges stuck zombies toward you and puts badly stuck ones back at a window. Levels whose start is
-a cutscene or vehicle won't work from the menu.
+Everything the mod does is printed to the console with `[nacht]` in front: the weapons and spawners it
+found, how many indoor and spawn spots it found around you, where the wall buys and box went. Send those
+lines along with what you saw.
 
 ## Changing it
 
-Edit `layout.py` (rooms, windows, doors, wall-buy spots) or `nacht_template.gsc` (builder and zombies
-mode), then run `python3 mw2cr_nacht/layout.py` to regenerate `mod/nacht/scripts/nacht.gsc`. The menu is
-`mod/nacht/ui_scripts/nacht/__init__.lua`.
+The game script is generated: edit `nacht_template.gsc` (and `layout.py` for the replica's rooms), then run
+`python3 mw2cr_nacht/layout.py` to regenerate `mod/nacht/scripts/nacht.gsc`. The menu is
+`mod/nacht/ui_scripts/nacht/__init__.lua`. `python3 -m pytest mw2cr_nacht` checks every engine call against
+MW2CR's function lists.

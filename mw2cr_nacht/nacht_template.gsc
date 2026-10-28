@@ -1,37 +1,12 @@
-// Remove the level's own soldiers, keeping their spawners for zombies.
-// Enemy spawners are preferred; levels without them (S.S.D.D.) use friendly
-// ones switched to the enemy team, so shooting them isn't friendly fire.
-nacht_clear_level_ai()
-{
-	enemies = [];
-	others = [];
-	foreach( s in getspawnerarray() )
-	{
-		if( !isdefined( s.classname ) || !issubstr( s.classname, "actor" ) )
-			continue;
-		if( isdefined( s.team ) && s.team == "axis" )
-			enemies[ enemies.size ] = s;
-		else
-			others[ others.size ] = s;
-	}
-	level.nacht_spawners = enemies;
-	level.nacht_switch_team = false;
-	if( enemies.size == 0 )
-	{
-		level.nacht_spawners = others;
-		level.nacht_switch_team = true;
-	}
-	print( "[nacht] spawners: " + enemies.size + " enemy, " + others.size + " other\n" );
-	foreach( ai in getaiarray() )
-		ai delete();
-}
-
 // Nacht der Untoten replica for Modern Warfare 2 Campaign Remastered (h2-mod).
 //
 // Builds Nacht's layout out of props and collision already loaded in the
-// current map, then runs a Nacht-style zombies mode in it. Start it from the
-// NACHT DER UNTOTEN button on the campaign menu, or from the console (~):
+// current map, then runs a Nacht-style zombies mode in it. It can also run
+// the same mode inside a real building of the level ("arena" mode, used for
+// Burger Town on Wolverines!). Start it from the NACHT DER UNTOTEN button on
+// the campaign menu, or from the console (~):
 //   set nacht_play 1     build Nacht around you and start round 1
+//   set nacht_here 1     start zombies in the building you're standing in
 //   set nacht_build 1    only build it (you end up in the start room)
 //   set nacht_clear 1    stop the game and remove the building
 // Everything is printed to the console as well, so send that output if
@@ -47,6 +22,11 @@ main()
 	setdvarifuninitialized( "nacht_clear", 0 );
 	setdvarifuninitialized( "nacht_autostart", 0 );
 	setdvarifuninitialized( "nacht_budget", 1100 );
+	setdvarifuninitialized( "nacht_here", 0 );
+	// Where arena mode was last started on this level ("x y z"), saved to the
+	// config so the next start from the menu can drop you straight there.
+	level.nacht_arena_dvar = "nacht_arena_" + getdvar( "mapname" );
+	setdvarifuninitialized( level.nacht_arena_dvar, "" );
 	precacheshader( "white" );
 	level.nacht_ents = [];
 	level.nacht_pieces = [];
@@ -60,17 +40,20 @@ nacht_watch()
 		wait 0.1;
 	wait 3;
 
-	// Started from the menu: wait for the level's intro to hand over control.
-	print( "[nacht] autostart=" + getdvarint( "nacht_autostart" ) + "\n" );
-	if( getdvarint( "nacht_autostart" ) != 0 )
+	// Started from the menu: 1 = build the replica, 2 = arena (real building).
+	autostart = getdvarint( "nacht_autostart" );
+	print( "[nacht] autostart=" + autostart + "\n" );
+	setdvar( "nacht_autostart", 0 );
+	if( autostart == 1 )
 	{
-		setdvar( "nacht_autostart", 0 );
 		nacht_say( "Nacht der Untoten: building in a few seconds..." );
 		wait 8;
 		setdvar( "nacht_play", 1 );
 	}
+	else if( autostart == 2 )
+		level thread nacht_arena_autostart();
 	else
-		nacht_say( "Nacht mod loaded. Console: set nacht_play 1" );
+		nacht_say( "Nacht mod loaded. Console: set nacht_play 1 (build) or set nacht_here 1 (this building)" );
 
 	for( ;; )
 	{
@@ -80,8 +63,15 @@ nacht_watch()
 			setdvar( "nacht_build", 0 );
 			setdvar( "nacht_play", 0 );
 			nacht_clear();
+			level.nacht_mode = "replica";
 			if( nacht_build() && play )
 				level thread nacht_zombies_start();
+		}
+		if( getdvarint( "nacht_here" ) != 0 )
+		{
+			setdvar( "nacht_here", 0 );
+			nacht_clear();
+			level thread nacht_arena_start( level.player.origin );
 		}
 		if( getdvarint( "nacht_clear" ) != 0 )
 		{
@@ -564,6 +554,9 @@ nacht_zombies_start()
 	level.nacht_zombies = [];
 	level.nacht_extra_ents = [];
 	level.nacht_bought = [];
+	level.nacht_windows = [];
+	level.nacht_buys = [];
+	level.nacht_spawn_spots = [];
 
 	nacht_collect_weapons();
 	nacht_clear_level_ai();
@@ -575,12 +568,20 @@ nacht_zombies_start()
 
 	nacht_setup_player();
 	nacht_hud_create();
-	nacht_setup_windows();
-	nacht_setup_buys();
+	if( level.nacht_mode == "arena" )
+	{
+		level thread nacht_level_cleaner();
+		nacht_arena_setup();
+	}
+	else
+	{
+		nacht_setup_windows();
+		nacht_setup_buys();
+	}
 	level thread nacht_player_loop();
 	level thread nacht_player_death_watch();
 
-	nacht_say( "Zombies: " + level.nacht_spawners.size + " spawners, " + level.nacht_pool.size + " weapons, " + level.nacht_windows.size + " windows." );
+	nacht_say( "Zombies: " + level.nacht_spawners.size + " spawners, " + level.nacht_pool.size + " weapons, " + level.nacht_windows.size + " windows, " + level.nacht_spawn_spots.size + " outdoor spawn spots." );
 	wait 3;
 
 	for( ;; )
@@ -693,7 +694,9 @@ nacht_alive_count()
 // any weapon pickups lying around. Only these are guaranteed to be loaded.
 nacht_collect_weapons()
 {
-	names = [];
+	if( !isdefined( level.nacht_pool_names ) )
+		level.nacht_pool_names = [];
+	names = level.nacht_pool_names;
 	foreach( w in level.player getweaponslistprimaries() )
 		names[ w ] = true;
 	foreach( ai in getaiarray() )
@@ -707,6 +710,7 @@ nacht_collect_weapons()
 			names[ getsubstr( ent.classname, 7 ) ] = true;
 	}
 
+	level.nacht_pool_names = names;
 	level.nacht_pool = [];
 	foreach( name, unused in names )
 	{
@@ -719,22 +723,51 @@ nacht_collect_weapons()
 		print( "[nacht]   " + w + " (" + weaponclass( w ) + ")\n" );
 }
 
-// Remove the level's own soldiers (keeping their spawners for zombies).
+// Remove the level's own soldiers, keeping their spawners for zombies.
+// Enemy spawners are preferred; levels without them (S.S.D.D.) use friendly
+// ones switched to the enemy team, so shooting them isn't friendly fire.
 nacht_clear_level_ai()
 {
-	level.nacht_spawners = [];
-	foreach( s in getspawnerteamarray( "axis" ) )
-		level.nacht_spawners[ level.nacht_spawners.size ] = s;
+	enemies = [];
+	others = [];
+	foreach( s in getspawnerarray() )
+	{
+		if( !isdefined( s.classname ) || !issubstr( s.classname, "actor" ) )
+			continue;
+		if( isdefined( s.team ) && s.team == "axis" )
+			enemies[ enemies.size ] = s;
+		else
+			others[ others.size ] = s;
+	}
+	level.nacht_spawners = enemies;
+	level.nacht_switch_team = false;
+	if( enemies.size == 0 )
+	{
+		level.nacht_spawners = others;
+		level.nacht_switch_team = true;
+	}
+	print( "[nacht] spawners: " + enemies.size + " enemy, " + others.size + " other\n" );
 	foreach( ai in getaiarray() )
 		ai delete();
 }
 
 nacht_spawn_zombie( health )
 {
-	windows = nacht_active_windows();
-	if( windows.size == 0 )
-		return undefined;
-	win = windows[ randomint( windows.size ) ];
+	win = undefined;
+	spot = undefined;
+	if( level.nacht_mode == "arena" )
+	{
+		spot = nacht_arena_spawn_spot();
+		if( !isdefined( spot ) )
+			return undefined;
+	}
+	else
+	{
+		windows = nacht_active_windows();
+		if( windows.size == 0 )
+			return undefined;
+		win = windows[ randomint( windows.size ) ];
+	}
 	spawner = level.nacht_spawners[ randomint( level.nacht_spawners.size ) ];
 
 	spawner.count = 1;
@@ -745,8 +778,17 @@ nacht_spawn_zombie( health )
 		return undefined;
 	if( level.nacht_switch_team )
 		z.team = "axis";
+	if( isdefined( z.weapon ) && z.weapon != "none" && !isdefined( level.nacht_pool_names[ z.weapon ] ) && weaponinventorytype( z.weapon ) == "primary" )
+	{
+		level.nacht_pool_names[ z.weapon ] = true;
+		level.nacht_pool[ level.nacht_pool.size ] = z.weapon;
+	}
 
-	z forceteleport( win.outside, ( 0, win.yaw_in, 0 ) );
+	if( isdefined( win ) )
+		z forceteleport( win.outside, ( 0, win.yaw_in, 0 ) );
+	else
+		z forceteleport( spot, ( 0, randomint( 360 ), 0 ) );
+	z.nacht_zombie = true;
 	z.ignoreall = true;
 	z.ignoreme = true;
 	z.grenadeammo = 0;
@@ -756,7 +798,10 @@ nacht_spawn_zombie( health )
 	z.maxhealth = health;
 	level.nacht_zombies[ level.nacht_zombies.size ] = z;
 
-	z thread nacht_zombie_think( win );
+	if( isdefined( win ) )
+		z thread nacht_zombie_think( win );
+	else
+		z thread nacht_zombie_chase();
 	z thread nacht_zombie_damage();
 	z thread nacht_zombie_death();
 	return z;
@@ -778,7 +823,11 @@ nacht_zombie_think( win )
 	}
 	wait 0.6;
 	self forceteleport( win.inside, ( 0, win.yaw_in, 0 ) );
+	self nacht_zombie_chase();
+}
 
+nacht_zombie_chase()
+{
 	self setgoalentity( level.player );
 	self thread nacht_zombie_attack();
 	self thread nacht_zombie_unstick();
@@ -826,6 +875,20 @@ nacht_zombie_unstick()
 		else
 			still = 0;
 		last = self.origin;
+
+		// Arena zombies walk the level's own paths; only a long stall gets
+		// them a fresh start somewhere out of sight.
+		if( level.nacht_mode == "arena" )
+		{
+			if( still >= 8 )
+			{
+				spot = nacht_arena_spawn_spot();
+				if( isdefined( spot ) )
+					self forceteleport( spot, self.angles );
+				still = 0;
+			}
+			continue;
+		}
 
 		if( still >= 10 || abs( self.origin[2] - level.player.origin[2] ) > 90 )
 		{
@@ -1408,6 +1471,263 @@ nacht_powerup_apply( type )
 		}
 		nacht_add_points( 400 );
 	}
+}
+
+
+// ---------------------------------------------------------------------------
+// Arena mode: zombies in a real building of the level (Burger Town)
+//
+// The level's path network already covers the building, so zombies walk in
+// through its real doors. Indoor spots (path nodes with a roof overhead) near
+// where you started get the wall buys and the box; outdoor nodes further out
+// are where zombies appear, picked out of your sight.
+
+nacht_arena_autostart()
+{
+	level endon( "nacht_end" );
+	nacht_collect_weapons();
+	level thread nacht_level_cleaner();
+	saved = nacht_parse_vec( getdvar( level.nacht_arena_dvar ) );
+	if( isdefined( saved ) )
+	{
+		nacht_say( "Taking you to the saved spot..." );
+		wait 2;
+		level.player setorigin( saved );
+		wait 1;
+		setdvar( "nacht_here", 1 );
+		return;
+	}
+
+	// First time on this level: walk there (the level is emptied for you).
+	held = 0;
+	shown = 0;
+	for( ;; )
+	{
+		if( gettime() > shown )
+		{
+			if( getdvar( "mapname" ) == "invasion" )
+				iprintlnbold( "Walk into Burger Town, then hold [Use] for 2 seconds" );
+			else
+				iprintlnbold( "Walk into the building, then hold [Use] for 2 seconds" );
+			shown = gettime() + 12000;
+		}
+		if( level.player usebuttonpressed() )
+			held += 0.1;
+		else
+			held = 0;
+		if( held >= 2 )
+		{
+			setdvar( "nacht_here", 1 );
+			return;
+		}
+		wait 0.1;
+	}
+}
+
+nacht_arena_start( center )
+{
+	level endon( "nacht_end" );
+	level.nacht_mode = "arena";
+	level.nacht_anchor = center;
+	saved = int( center[0] ) + " " + int( center[1] ) + " " + int( center[2] );
+	executecommand( "seta " + level.nacht_arena_dvar + " \"" + saved + "\"" );
+	nacht_say( "Arena at " + saved + " (saved for next time)" );
+	nacht_zombies_start();
+}
+
+nacht_parse_vec( text )
+{
+	if( !isdefined( text ) || text == "" )
+		return undefined;
+	parts = strtok( text, " " );
+	if( parts.size < 3 )
+		return undefined;
+	return ( int( parts[0] ), int( parts[1] ), int( parts[2] ) );
+}
+
+// Keep the level empty: its own soldiers and vehicles would otherwise shoot
+// you while you play.
+nacht_level_cleaner()
+{
+	level notify( "nacht_cleaner" );
+	level endon( "nacht_cleaner" );
+	level endon( "nacht_end" );
+	for( ;; )
+	{
+		foreach( ai in getaiarray() )
+		{
+			if( !isdefined( ai.nacht_zombie ) )
+				ai delete();
+		}
+		if( !level.player islinked() )
+		{
+			foreach( ent in getentarray() )
+			{
+				if( isdefined( ent.classname ) && issubstr( ent.classname, "script_vehicle" ) )
+					ent delete();
+			}
+		}
+		wait 1;
+	}
+}
+
+nacht_has_roof( point )
+{
+	trace = bullettrace( point + ( 0, 0, 40 ), point + ( 0, 0, 600 ), false, undefined );
+	return trace[ "fraction" ] < 1;
+}
+
+nacht_arena_setup()
+{
+	center = level.nacht_anchor;
+	inside = [];
+	checked = 0;
+	foreach( node in getallnodes() )
+	{
+		checked++;
+		if( checked % 150 == 0 )
+			wait 0.05;
+		d = distance( node.origin, center );
+		if( d < 500 && abs( node.origin[2] - center[2] ) < 80 )
+		{
+			if( nacht_has_roof( node.origin ) )
+				inside[ inside.size ] = node.origin;
+		}
+		else if( d > 900 && d < 2400 && level.nacht_spawn_spots.size < 120 )
+		{
+			if( !nacht_has_roof( node.origin ) )
+				level.nacht_spawn_spots[ level.nacht_spawn_spots.size ] = node.origin;
+		}
+	}
+	print( "[nacht] arena: " + checked + " path nodes, " + inside.size + " indoor spots, " + level.nacht_spawn_spots.size + " spawn spots\n" );
+	if( inside.size == 0 )
+		inside[0] = center;
+
+	// Four wall buys and the box, spread out over the indoor spots.
+	spots = nacht_spread( inside, 5 );
+	slots = strtok( "rifle,sniper|rifle,smg|smg,mg|spread,smg", "|" );
+	costs = strtok( "200|600|1200|1200", "|" );
+	used = [];
+	for( i = 0; i < 4 && i < spots.size; i++ )
+	{
+		weapon = nacht_pick_weapon( strtok( slots[i], "," ), used );
+		if( !isdefined( weapon ) )
+			continue;
+		used[ weapon ] = true;
+		wall = nacht_wall_spot( spots[i] );
+		b = nacht_buy( "weapon", wall.origin, int( costs[i] ), 72 );
+		b.weapon = weapon;
+		model = getweaponmodel( weapon );
+		if( isdefined( model ) && model != "" )
+		{
+			m = nacht_extra( spawn( "script_model", wall.origin ) );
+			m setmodel( model );
+			m.angles = ( 0, wall.yaw + 90, 0 );
+		}
+		print( "[nacht] wall buy " + weapon + " at " + wall.origin + "\n" );
+	}
+
+	box_at = center;
+	if( spots.size > 4 )
+		box_at = spots[4];
+	nacht_buy( "box", box_at + ( 0, 0, 24 ), 950, 72 );
+	crate = nacht_find_model( "crate,box,case,chest" );
+	if( isdefined( crate ) )
+	{
+		lid = nacht_extra( spawn( "script_model", box_at ) );
+		lid setmodel( crate );
+	}
+	print( "[nacht] box at " + box_at + "\n" );
+	level.nacht_box_busy = false;
+}
+
+// n points from the list, each as far as possible from the ones already picked.
+nacht_spread( points, n )
+{
+	picked = [];
+	if( points.size == 0 )
+		return picked;
+	picked[0] = points[0];
+	while( picked.size < n && picked.size < points.size )
+	{
+		best = undefined;
+		best_d = -1;
+		foreach( p in points )
+		{
+			nearest = 999999;
+			foreach( q in picked )
+			{
+				d = distance( p, q );
+				if( d < nearest )
+					nearest = d;
+			}
+			if( nearest > best_d )
+			{
+				best_d = nearest;
+				best = p;
+			}
+		}
+		picked[ picked.size ] = best;
+	}
+	return picked;
+}
+
+// The closest wall to a spot, so a wall buy hangs on a real wall.
+nacht_wall_spot( point )
+{
+	spot = spawnstruct();
+	spot.origin = point + ( 0, 0, 48 );
+	spot.yaw = 0;
+	best = 97;
+	for( a = 0; a < 360; a += 45 )
+	{
+		dir = anglestoforward( ( 0, a, 0 ) );
+		start = point + ( 0, 0, 56 );
+		trace = bullettrace( start, start + dir * 96, false, undefined );
+		d = trace[ "fraction" ] * 96;
+		if( d < best )
+		{
+			best = d;
+			normal = trace[ "normal" ];
+			spot.origin = trace[ "position" ] + normal * 3;
+			facing = vectortoangles( normal );
+			spot.yaw = facing[1];
+		}
+	}
+	return spot;
+}
+
+nacht_find_model( words )
+{
+	list = strtok( words, "," );
+	foreach( m in getentarray( "script_model", "classname" ) )
+	{
+		if( !isdefined( m.model ) || m.model == "" )
+			continue;
+		lower = tolower( m.model );
+		foreach( w in list )
+		{
+			if( issubstr( lower, w ) )
+				return m.model;
+		}
+	}
+	return undefined;
+}
+
+nacht_arena_spawn_spot()
+{
+	if( level.nacht_spawn_spots.size == 0 )
+		return undefined;
+	eye = level.player.origin + ( 0, 0, 60 );
+	for( i = 0; i < 12; i++ )
+	{
+		spot = level.nacht_spawn_spots[ randomint( level.nacht_spawn_spots.size ) ];
+		if( distance( spot, level.player.origin ) < 600 )
+			continue;
+		if( !sighttracepassed( eye, spot + ( 0, 0, 48 ), false, undefined ) )
+			return spot;
+	}
+	return level.nacht_spawn_spots[ randomint( level.nacht_spawn_spots.size ) ];
 }
 
 // ---------------------------------------------------------------------------

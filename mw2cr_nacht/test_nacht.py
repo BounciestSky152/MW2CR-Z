@@ -11,9 +11,10 @@ sys.modules["nacht_layout"] = layout
 spec.loader.exec_module(layout)
 
 # H2 (MW2CR) builtins the script uses, checked against gsc-tool's h2 tables
-# (h2_func.cpp / h2_meth.cpp) and h2-mod's extensions (print). Functions and
+# (h2_func.cpp / h2_meth.cpp) and h2-mod's extensions (print, executecommand). Functions and
 # methods are separate: calling a function as a method fails to compile.
 H2_FUNCTIONS = {
+    "anglestoforward", "executecommand", "getallnodes", "getdvar", "gettime", "sighttracepassed",
     "abs", "bullettrace", "bullettracepassed", "ceil", "distance", "earthquake", "getaiarray", "getdvarint",
     "getentarray", "getspawnerarray", "getspawnerteamarray", "getsubstr", "getweaponmodel", "int", "iprintln", "iprintlnbold",
     "isalive", "issubstr", "length", "newhudelem", "precacheshader", "print", "randomint", "setdvar",
@@ -22,7 +23,7 @@ H2_FUNCTIONS = {
 }
 H2_METHODS = {
     "clonebrushmodeltoscriptmodel", "delete", "destroy", "dodamage", "fadeovertime", "forceteleport",
-    "getcurrentweapon", "getpointinbounds", "getweaponslistall", "getweaponslistprimaries", "givemaxammo",
+    "getcurrentweapon", "getpointinbounds", "getweaponslistall", "getweaponslistprimaries", "givemaxammo", "islinked",
     "giveweapon", "hasweapon", "hide", "notsolid", "rotateyaw", "setgoalentity", "setgoalpos", "setmodel",
     "setnormalhealth", "setorigin", "setspawnerteam", "setplayerangles", "setshader", "settext", "setvalue", "show", "solid",
     "stalingradspawn", "switchtoweapon", "takeallweapons", "takeweapon", "usebuttonpressed", "viewkick",
@@ -100,3 +101,8 @@ def test_no_reserved_words_or_call_indexing():
         assert not re.search(r"(?<![\w.])%s\b" % word, c), word
     assert not re.search(r"\.size\s*\[", c)
     assert not re.search(r"\)\s*\[", c)
+
+
+def test_no_function_defined_twice():
+    names = re.findall(r"^([a-z_0-9]+)\s*\(", code(), re.M)
+    assert len(names) == len(set(names)), sorted({n for n in names if names.count(n) > 1})
