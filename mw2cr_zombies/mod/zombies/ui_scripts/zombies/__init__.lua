@@ -1,16 +1,28 @@
--- MW2CR Zombies: an MW2CR ZOMBIES button on the campaign main menu opening this
--- mod's menu. PLAY loads Wolverines!; scripts/zombies.gsc turns it into the
--- zombies mode in Nate's Sports Bar & Grill.
+-- MW2CR Zombies menus. On the campaign main menu, MW2CR ZOMBIES opens PLAY,
+-- BUILD MODE and HOW TO PLAY; both start Wolverines!, which
+-- scripts/zombies.gsc turns into the zombies mode in Nate's Sports Bar &
+-- Grill. In game, the pause menu gets BUILD MENU: pick a weapon or a barrier
+-- and its price, and the script places it where you aim (picks go to the
+-- script through the zm_cmd dvar).
 
-local function getbest()
-    local ok, value = pcall(function() return Engine.GetDvarString("zm_best") end)
-    if (ok and value ~= nil and value ~= "") then
+local function getdvar(name)
+    local ok, value = pcall(function() return Engine.GetDvarString(name) end)
+    if (ok and value ~= nil) then
         return value
     end
-    return "0"
+    return ""
 end
 
-local function play()
+local function getbest()
+    local best = getdvar("zm_best")
+    if (best == "") then
+        return "0"
+    end
+    return best
+end
+
+local function play(build)
+    Engine.Exec("set zm_build_mode " .. (build and "1" or "0"))
     -- Same form the game's own level select uses.
     pcall(function() LUI.FlowManager.PushMenuStackToDVar() end)
     if (Engine.StreamingInstallMap) then
@@ -20,15 +32,16 @@ local function play()
     end
 end
 
+local placehelp = "Then aim where it goes: a live preview follows your aim. Fire or Use places it, Aim turns it, Melee cancels."
+
 local howto = {
     { "THE GOAL", "Survive as many rounds as you can inside Nate's Sports Bar & Grill. Every round brings more, tougher zombies. You can't leave Nate's." },
     { "POINTS", "You start with 500. +10 per hit, +60 per kill, +100 for a headshot kill, +130 for a knife kill." },
-    { "STARTING PISTOL", "You start with a pistol that hits half again as hard as normal (the M1911 if the game has one, otherwise the level's M9)." },
-    { "THE DINING AREA", "You start in Nate's dining area. A FAL (1250) lies on one of the tables, and Quick Revive is here too." },
-    { "THE KITCHEN", "Clearing the barricade in the kitchen doorway costs 3000. The kitchen has three more wall weapons, the ammo crate and the mystery box." },
-    { "WALL WEAPONS", "Outlined weapons are for sale: the FAL in the dining area and three in the kitchen. Buying one you already have refills its ammo for half price." },
-    { "QUICK REVIVE", "Quick Revive (1500): the hit that would take you down revives you instead, once per purchase." },
-    { "AMMO CRATE AND MYSTERY BOX", "The ammo crate (1000) refills every weapon and your grenades. The mystery box (950) gives a random weapon; take it within 10 seconds." },
+    { "BUILDING", "Nothing is for sale until you place it. In game, press Esc and pick BUILD MENU: choose a weapon or a barrier and its price. " .. placehelp .. " Everything you place is remembered for next time." },
+    { "WALL WEAPONS", "Aim at a wall to hang a weapon on it, or at a table or the floor to lay it there. Weapons for sale are outlined; buying one you already have refills its ammo for half price." },
+    { "BARRIERS", "Aim through a doorway and the barrier spans it. Once the zombies are on, you can't get past a barrier until you buy it, and whatever is behind it opens up." },
+    { "BUILD MODE", "Starts Nate's without zombies so you can place things in peace. Pick START ZOMBIES in the build menu when you're ready." },
+    { "STARTING WEAPON", "You start with a pistol that hits half again as hard as normal. MW2CR has no M1911, so it's the USP .45 if the level has one, otherwise the M9. Pick your own under STARTING WEAPON in the build menu." },
     { "POWER-UPS", "Killed zombies sometimes drop one: Max Ammo, Double Points, Insta-Kill, Kaboom (kills every zombie) or Bonus Points." },
     { "ZOMBIES", "Walkers at first, faster runners from round 3, and tough brutes from round 6. Three hits and you're down; a brute's hit counts double. Four seconds without a hit and you've recovered." },
 }
@@ -55,6 +68,12 @@ local function finishmenu(menu)
     return menu
 end
 
+local function button(menu, text, desc, callback)
+    menu:AddButton(string.el(text), callback, nil, true, nil, {
+        desc_text = string.el(desc)
+    })
+end
+
 LUI.addmenubutton("main_campaign", {
     index = 1,
     text = string.el("MW2CR ZOMBIES"),
@@ -66,34 +85,156 @@ LUI.addmenubutton("main_campaign", {
 
 LUI.MenuBuilder.registerType("zm_menu", function(a1)
     local menu = newmenu(a1, "MW2CR ZOMBIES")
-
-    menu:AddButton(string.el("PLAY"), play, nil, true, nil, {
-        desc_text = string.el("Start in Nate's Sports Bar & Grill on Wolverines!. Best round so far: " .. getbest())
-    })
-
-    menu:AddButton(string.el("SET UP NATE'S AGAIN"), function()
-        Engine.Exec("seta zm_layout \"\"")
-        play()
-    end, nil, true, nil, {
-        desc_text = string.el("Pick the FAL's table and the kitchen doorway again, then play.")
-    })
-
-    menu:AddButton(string.el("HOW TO PLAY"), function()
+    button(menu, "PLAY", "Start in Nate's Sports Bar & Grill on Wolverines!. Best round so far: " .. getbest(), function()
+        play(false)
+    end)
+    button(menu, "BUILD MODE", "Start in Nate's without zombies and place wall weapons and barriers (Esc, then BUILD MENU).", function()
+        play(true)
+    end)
+    button(menu, "HOW TO PLAY", "Points, building, wall weapons, barriers, power-ups and zombie types.", function()
         LUI.FlowManager.RequestAddMenu(nil, "zm_howto")
-    end, nil, true, nil, {
-        desc_text = string.el("Points, wall weapons, Quick Revive, the mystery box, power-ups and zombie types.")
-    })
-
+    end)
     return finishmenu(menu)
 end)
 
 LUI.MenuBuilder.registerType("zm_howto", function(a1)
     local menu = newmenu(a1, "HOW TO PLAY")
     for i = 1, #howto do
-        local entry = howto[i]
-        menu:AddButton(string.el(entry[1]), function() end, nil, true, nil, {
-            desc_text = string.el(entry[2])
-        })
+        button(menu, howto[i][1], howto[i][2], function() end)
     end
     return finishmenu(menu)
 end)
+
+-- In game: the build menu.
+
+local prices = { 250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000, 4000, 5000 }
+local pending = {}
+
+-- The weapons the level has loaded, as the script lists them:
+-- "name=what players call it=class;...". Pistols first for the starting weapon.
+local function weapons(pistolsfirst)
+    local list = {}
+    local seen = {}
+    for entry in string.gmatch(getdvar("zm_weapons"), "[^;]+") do
+        local name, label, class = string.match(entry, "^([^=]+)=([^=]*)=?(.*)$")
+        if (name) then
+            table.insert(list, { name = name, label = label, class = class })
+            seen[label] = (seen[label] or 0) + 1
+        end
+    end
+    local sorted = {}
+    for _, w in ipairs(list) do
+        if (seen[w.label] > 1) then
+            w.label = w.label .. " (" .. w.name .. ")"
+        end
+        if (not pistolsfirst or w.class == "pistol") then
+            table.insert(sorted, w)
+        end
+    end
+    if (pistolsfirst) then
+        for _, w in ipairs(list) do
+            if (w.class ~= "pistol") then
+                table.insert(sorted, w)
+            end
+        end
+    end
+    return sorted
+end
+
+-- Hands the pick to the script and goes back to the game.
+local function send(menu, cmd)
+    Engine.Exec("set zm_cmd \"" .. cmd .. "\"")
+    if (not pcall(function() LUI.FlowManager.RequestCloseAllMenus(menu) end)) then
+        pcall(function() LUI.FlowManager.RequestLeaveMenu(menu) end)
+    end
+end
+
+LUI.MenuBuilder.registerType("zm_build", function(a1)
+    local menu = newmenu(a1, "BUILD MENU")
+    button(menu, "PLACE A WEAPON", "Pick a weapon and its price. " .. placehelp, function()
+        pending = { kind = "weapon" }
+        LUI.FlowManager.RequestAddMenu(nil, "zm_build_weapons")
+    end)
+    button(menu, "PLACE A BARRIER", "Pick its price, then aim through a doorway: the barrier spans it. Once the zombies are on, nobody gets past it until it's bought.", function()
+        pending = { kind = "barrier", label = "Barrier" }
+        LUI.FlowManager.RequestAddMenu(nil, "zm_build_price")
+    end)
+    button(menu, "MOVE SOMETHING", "Aim at something you placed and press Fire or Use to pick it up, then place it again.", function()
+        send(menu, "move")
+    end)
+    button(menu, "REMOVE SOMETHING", "Aim at something you placed and press Fire or Use to remove it.", function()
+        send(menu, "remove")
+    end)
+    button(menu, "STARTING WEAPON", "The weapon you start with; it hits half again as hard as normal. MW2CR has no M1911.", function()
+        pending = { kind = "starter" }
+        LUI.FlowManager.RequestAddMenu(nil, "zm_build_weapons")
+    end)
+    button(menu, "REMOVE EVERYTHING", "Take away every weapon and barrier you placed.", function()
+        LUI.FlowManager.RequestAddMenu(nil, "zm_build_clear")
+    end)
+    if (getdvar("zm_build_mode") == "1") then
+        button(menu, "START ZOMBIES", "Done building: here they come.", function()
+            send(menu, "start")
+        end)
+    end
+    return finishmenu(menu)
+end)
+
+LUI.MenuBuilder.registerType("zm_build_weapons", function(a1)
+    local starter = pending.kind == "starter"
+    local menu = newmenu(a1, starter and "STARTING WEAPON" or "PLACE A WEAPON")
+    local list = weapons(starter)
+    if (#list == 0) then
+        button(menu, "NO WEAPONS FOUND", "The level hasn't listed its weapons yet; try again in a moment.", function() end)
+    end
+    for i = 1, #list do
+        local w = list[i]
+        button(menu, string.upper(w.label), w.label .. " - " .. w.name .. " (" .. w.class .. ")", function()
+            if (starter) then
+                send(menu, "starter " .. w.name)
+            else
+                pending = { kind = "weapon", name = w.name, label = w.label }
+                LUI.FlowManager.RequestAddMenu(nil, "zm_build_price")
+            end
+        end)
+    end
+    return finishmenu(menu)
+end)
+
+LUI.MenuBuilder.registerType("zm_build_price", function(a1)
+    local menu = newmenu(a1, "PRICE: " .. string.upper(pending.label or ""))
+    for i = 1, #prices do
+        local price = prices[i]
+        button(menu, tostring(price), placehelp, function()
+            if (pending.kind == "barrier") then
+                send(menu, "barrier " .. price)
+            else
+                send(menu, "weapon " .. pending.name .. " " .. price)
+            end
+        end)
+    end
+    return finishmenu(menu)
+end)
+
+LUI.MenuBuilder.registerType("zm_build_clear", function(a1)
+    local menu = newmenu(a1, "REMOVE EVERYTHING?")
+    button(menu, "YES, REMOVE EVERYTHING", "Every weapon and barrier you placed goes. This can't be undone.", function()
+        send(menu, "clear")
+    end)
+    return finishmenu(menu)
+end)
+
+-- BUILD MENU in the pause menu, the way h2-mod adds its own pause buttons.
+if (not Engine.InFrontend()) then
+    LUI.onmenuopen("sp_pause_menu", function(element)
+        if (getdvar("mapname") ~= "invasion" or getdvar("zm_off") == "1") then
+            return
+        end
+        local menu = element:getFirstChild()
+        local entry = menu:AddButton(string.el("BUILD MENU"), function()
+            LUI.FlowManager.RequestAddMenu(nil, "zm_build")
+        end)
+        menu.list:removeElement(entry)
+        menu.list:insertElement(entry, 2)
+    end)
+end

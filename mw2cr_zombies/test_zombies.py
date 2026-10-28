@@ -11,8 +11,9 @@ MOD = ROOT / "mod" / "zombies"
 
 # H2 (MW2CR) builtins the script uses, checked against gsc-tool's h2 tables
 # (h2_func.cpp / h2_meth.cpp) and h2-mod's extensions (print, executecommand,
-# assetexists).
+# assetexists). Each one here was looked up in those tables.
 H2_FUNCTIONS = {
+    "ambientstop", "anglestoright", "musicstop", "precachemodel", "setdvar", "vectordot",
     "assetexists", "cos", "istransientloaded", "loadtransient", "sin",
     "abs", "anglestoforward", "bullettrace", "bullettracepassed", "distance", "distance2d", "earthquake",
     "executecommand", "getaiarray", "getallnodes", "getdvar", "getdvarint", "getentarray", "getspawnerarray",
@@ -21,6 +22,8 @@ H2_FUNCTIONS = {
     "spawn", "spawnstruct", "strtok", "tolower", "vectortoangles", "weaponclass", "weaponinventorytype",
 }
 H2_METHODS = {
+    "adsbuttonpressed", "allowedstances", "attach", "attackbuttonpressed", "disableweapons", "meleebuttonpressed",
+    "show", "stopsounds",
     "enablehealthshield", "hidepart", "hudoutlineenable", "kill", "playerclearstreamorigin", "playersetstreamorigin",
     "setgoalpos", "setplayerangles", "geteye", "getplayerangles",
     "getpointinbounds",
@@ -103,9 +106,21 @@ def test_only_runs_on_wolverines():
 def test_menu_and_mod_info():
     lua = (MOD / "ui_scripts" / "zombies" / "__init__.lua").read_text()
     assert 'LUI.addmenubutton("main_campaign"' in lua and '"invasion"' in lua
-    assert lua.count("registerType(") == 2
+    assert 'LUI.onmenuopen("sp_pause_menu"' in lua
+    types = set(re.findall(r'registerType\("(\w+)"', lua))
+    opened = set(re.findall(r'RequestAddMenu\(nil, "(\w+)"\)', lua))
+    assert opened <= types
     info = json.loads((MOD / "info.json").read_text())
     assert info["name"] == "MW2CR Zombies"
+
+
+def test_every_build_menu_command_is_handled():
+    """What the menu sends through zm_cmd is what the script listens for."""
+    lua = (MOD / "ui_scripts" / "zombies" / "__init__.lua").read_text()
+    sent = set(re.findall(r'send\(menu, "(\w+)', lua))
+    src = (MOD / "scripts" / "zombies.gsc").read_text()
+    assert sent and all('what == "%s"' % c in src for c in sent)
+    assert 'Engine.Exec("set zm_cmd' in lua and 'getdvar( "zm_cmd" )' in src
 
 
 def test_installer_uses_windows_line_endings():

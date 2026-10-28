@@ -6,30 +6,35 @@ can't leave, and zombies come in endless rounds.
 
 ## What's in it
 
-- **Main menu:** an MW2CR ZOMBIES button on the campaign menu with PLAY (shows your best round), SET UP NATE'S
-  AGAIN and HOW TO PLAY.
-- **Rooms:** you start in Nate's dining area. A barricade of chairs in the kitchen doorway costs 3000 to clear.
+- **Main menu:** an MW2CR ZOMBIES button on the campaign menu with PLAY (shows your best round), BUILD MODE (Nate's
+  without zombies, for placing things in peace) and HOW TO PLAY.
+- **Build menu (you design Nate's):** nothing is for sale until you place it. In game press Esc and pick
+  **BUILD MENU**:
+  - **PLACE A WEAPON:** pick any weapon the level has loaded and a price (250-5000), then aim. A live preview
+    follows your aim: on a wall it hangs upright along it, on a table or the floor it lies flat. Fire or Use
+    places it, Aim turns it 15 degrees, Melee cancels.
+  - **PLACE A BARRIER:** pick a price, then aim through a doorway. The preview is a pile of chairs that sizes
+    itself to the doorway. Once the zombies are on, you can't get past it until you buy it.
+  - **MOVE SOMETHING / REMOVE SOMETHING:** aim at something you placed (it lights up), then Fire or Use.
+  - **STARTING WEAPON:** what you start with (it hits half again as hard as normal).
+  - **REMOVE EVERYTHING**, and in build mode **START ZOMBIES**.
+
+  Everything you place is saved in your config and comes back next game.
 - **Rounds:** endless, more and tougher zombies each round, a short break between rounds.
-- **Zombies:** the level's Russian soldiers, walking (runners run) straight at you without ducking, taking
-  cover or shooting, guns hidden. Walkers first, runners from round 3, tough brutes from round 6. They spawn
-  out of sight outside Nate's and come in through the doors; if they can't find a way in, they climb in
-  somewhere you aren't looking.
+- **Zombies:** the level's Russian soldiers with their guns hidden and a knife in hand (if the game has a knife
+  model loaded). They walk upright (runners run) straight at you and are re-aimed at you four times a second.
+  Walkers first, runners from round 3, tough brutes from round 6. A zombie that's stuck for 4 seconds, or can't
+  find a way in, climbs in somewhere you aren't looking.
 - **Getting hit:** three hits and you're down (a brute's hit counts double); four seconds without a hit and
-  you've recovered. Each hit jolts you, shakes the screen and flashes it red.
+  you've recovered.
 - **Points:** 500 to start, +10 per hit, +60 per kill, +100 headshot kill, +130 knife kill.
-- **Starting pistol:** the M1911 if the game has one (MW2CR doesn't seem to), otherwise the level's M9; it hits
-  half again as hard as normal.
-- **Dining area:** a FAL lying on a table (1250) and Quick Revive (1500: the hit that would take you down revives
-  you instead, once per purchase).
-- **Kitchen:** three more wall weapons (1000 / 1200 / 1500), the ammo crate (1000, refills everything including
-  grenades) and the mystery box (950). Weapons for sale are outlined; buying one you have refills its ammo for
-  half price.
+- **Starting pistol:** MW2CR has no M1911 (it was never in MW2), so it's the USP .45 if the level has it,
+  otherwise the M9, unless you pick another in the build menu.
 - **Power-ups:** Max Ammo, Double Points, Insta-Kill, Kaboom (kills every zombie) and Bonus Points.
+- **Quiet level:** the level's music, ambience, radio chatter, dialogue and battle chatter are switched off.
 - **Best round** is saved.
 
-The level's own soldiers and vehicles are removed. MW2CR has no zombie models, so the zombies are the level's
-Russian soldiers told to ignore everything and rush you; they only hurt you up close. The guns are whatever
-Wolverines! has loaded.
+The level's own soldiers, vehicles and loose weapons are removed. There are no perks.
 
 ## Install (Windows)
 
@@ -40,15 +45,14 @@ Wolverines! has loaded.
 3. Start `h2-mod.exe`, open **Mods**, load **MW2CR Zombies** (the game restarts).
 4. **MW2CR ZOMBIES → PLAY.**
 
-The level starts you inside Nate's automatically. No console commands are needed. The first game asks for two
-quick steps (look at the table for the FAL and hold Use; stand in the kitchen doorway facing the kitchen and hold
-Use); after that it remembers. The console then shows a `[zombies] LAYOUT ...` line: send it and it gets built in.
+The level starts you inside Nate's automatically. No console commands are needed. Start with **BUILD MODE** to
+place your wall weapons and barriers, then pick START ZOMBIES in the build menu.
 
 ## If something's wrong
 
 Everything the mod does is printed to the console (`~`) with `[zombies]` in front: the weapons and spawners it
-found, Nate's outline and how many indoor spots it has, where each wall weapon, perk, the ammo crate and the
-box went. Send those lines with what you saw.
+found, Nate's outline and how many indoor spots it has, the streamed zones it loads around Nate's, and what you
+placed. Send those lines with what you saw.
 
 ## Files
 
