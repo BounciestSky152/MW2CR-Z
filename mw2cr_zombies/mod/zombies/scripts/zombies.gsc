@@ -50,11 +50,15 @@ zm_main()
 	level.player thread zm_stream_nates();
 	iprintlnbold( "Loading Nate's Sports Bar & Grill..." );
 	wait 3;
-	level.player setorigin( level.zm_start );
+	zm_move_to_nates();
 	zm_say( "Nate's Sports Bar & Grill at " + zm_vec_text( level.zm_start ) );
 	zm_find_nates_bounds();
-	zm_build_area();
+	level.zm_area = [];
+	level.zm_area[0] = level.zm_start;
+	// The fence runs from here on; it also brings you back if the level's
+	// intro pulls you away (it can attach you to its opening scene).
 	level thread zm_fence();
+	zm_build_area();
 	zm_game();
 }
 
@@ -64,6 +68,13 @@ zm_stream_nates()
 	self playersetstreamorigin( level.zm_start );
 	wait 6;
 	self playerclearstreamorigin();
+}
+
+zm_move_to_nates()
+{
+	zm_free_player();
+	level.player setorigin( level.zm_start );
+	level.player setplayerangles( ( 0, 90, 0 ) );
 }
 
 zm_init()
@@ -375,18 +386,24 @@ zm_fence()
 {
 	level endon( "zm_end" );
 	level.player endon( "death" );
-	last_ok = level.player.origin;
-	warned = 0;
+	last_ok = level.zm_start;
+	// No warning while the level's intro is still trying to move you.
+	warned = gettime() + 30000;
+	moved = 0;
 	for( ;; )
 	{
 		wait 0.1;
 		pos = level.player.origin;
-		if( zm_inside( pos ) )
+		if( !level.player islinked() && zm_inside( pos ) )
 		{
 			last_ok = pos;
 			continue;
 		}
+		zm_free_player();
 		level.player setorigin( last_ok );
+		moved++;
+		if( moved == 1 || moved % 50 == 0 )
+			print( "[zombies] put back in Nate's (" + moved + " times) from " + zm_vec_text( pos ) );
 		if( gettime() > warned )
 		{
 			iprintlnbold( "You can't leave Nate's" );

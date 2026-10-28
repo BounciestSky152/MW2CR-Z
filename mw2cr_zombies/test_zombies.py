@@ -20,7 +20,7 @@ H2_FUNCTIONS = {
 }
 H2_METHODS = {
     "enablehealthshield", "hidepart", "hudoutlineenable", "kill", "playerclearstreamorigin", "playersetstreamorigin",
-    "setgoalpos",
+    "setgoalpos", "setplayerangles",
     "getpointinbounds",
     "delete", "disableinvulnerability", "dodamage", "enableinvulnerability", "enableweapons", "fadeovertime",
     "forceteleport", "freezecontrols", "getcurrentweapon", "getweaponslistall", "getweaponslistoffhands",
